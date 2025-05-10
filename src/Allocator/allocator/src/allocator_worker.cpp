@@ -6,8 +6,8 @@ AllocatorWorker::AllocatorWorker() : Node("allocator_node") {
   const double l_1 = 0.4130990258;  // Arm length
   const double l_2 = 0.4130990258;
   const double C_m = 0.21496;
-  A = (Matrix4d() << -l_1,  l_1,  l_1, -l_1,
-                     l_2, l_2,  -l_2,  -l_2,
+  A = (Matrix4d() << l_1,  l_1,  -l_1, -l_1,
+                     -l_2, l_2,  l_2,  -l_2,
                       C_m, -C_m,  C_m, -C_m,
                       1.0,  1.0,  1.0,  1.0).finished();
   A_inv = A.inverse();

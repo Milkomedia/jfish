@@ -1,1 +1,1 @@
-float64 hz # mujoco simulation loop Hz(measured) [Hz]
+float64[9] inertia # drone inertia matrix

@@ -64,7 +64,6 @@ private:
 
   double m = 0.0;  /**< Mass of the rover (kg) */
   double g =0.0;  /**< Gravitational acceleration (m/s^2) */
-  Matrix3 J = Matrix3::Zero();  /**< Inertia matrix for the rover */
 
   // Attitude gains
   Matrix3 kR = Matrix3::Zero();  /**< Attitude gains */

@@ -1,0 +1,1 @@
+float64 hz # mujoco simulation loop Hz(measured) [Hz]

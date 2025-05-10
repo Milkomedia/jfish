@@ -2,11 +2,12 @@ import os
 from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
-from mujoco_interfaces.msg import MotorThrust, MuJoCoMeas, MujocoState
+from mujoco_interfaces.msg import MotorThrust, MuJoCoMeas, MujocoHz, MujocoState
 from dynamixel_interfaces.msg import JointVal
 
 import mujoco
 import mujoco.viewer
+from mujoco import mjtObj
 from rclpy.executors import SingleThreadedExecutor
 import threading
 import time
@@ -24,7 +25,7 @@ class MuJoCoSimulatorNode(Node):
         scene_file_path = os.path.join(package_share_dir, 'xml', 'scene.xml')
         self.model = mujoco.MjModel.from_xml_path(scene_file_path)
         self.data = mujoco.MjData(self.model)
-        self.model.opt.timestep = 0.001  # 1kHz simulation frequency
+        self.model.opt.timestep = 0.002  # 1kHz simulation frequency
 
         # Initialize motor thrust and moments
         self.motor_thrusts = [0.0, 0.0, 0.0, 0.0]
@@ -34,11 +35,14 @@ class MuJoCoSimulatorNode(Node):
         self.a3_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
         self.a4_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
 
+        self.body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, b"BODY")
+        self.site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE,  b"imu")
+
         # Timer to run the simulation at 1ms intervals
         self._sim_times = deque(maxlen=1200)
         now = time.monotonic()
         self._sim_times.append(now)
-        self.timer = self.create_timer(0.001, self.run_simulation)  # 1ms interval (1kHz)
+        self.timer = self.create_timer(0.002, self.run_simulation)  # 1ms interval (1kHz)
 
         # Start MuJoCo viewer in a separate thread
         self.viewer_thread = threading.Thread(target=self.run_viewer, daemon=True)
@@ -47,6 +51,7 @@ class MuJoCoSimulatorNode(Node):
 
         # publishers
         self.mujoco_meas_publisher = self.create_publisher(MuJoCoMeas, '/mujoco_meas', 1)
+        self.mujoco_hz_publisher = self.create_publisher(MujocoHz, '/mujoco_hz', 1)
         self.mujoco_state_publisher = self.create_publisher(MujocoState, '/mujoco_state', 1)
 
         # Timer to publish /mujoco_state
@@ -139,12 +144,26 @@ class MuJoCoSimulatorNode(Node):
             a4_q = a4_q
         )
         self.mujoco_meas_publisher.publish(msg)
+        
+        com_arr = self.data.subtree_com[self.body_id]
+        x, y, z = float(com_arr[0]), float(com_arr[1]), float(com_arr[2])
 
+        site_pos = self.data.site_xpos[self.site_id]
+        sx, sy, sz = float(site_pos[0]), float(site_pos[1]), float(site_pos[2])
+
+        # imu 기준 COM 오프셋 벡터
+        rel_x = x - sx
+        rel_y = y - sy
+        rel_z = z - sz
+
+        # ------- INERTIA ------ #
+        
+        
     def publish_mujoco_state(self):
         measured_hz = len(self._sim_times) / (self._sim_times[-1] - self._sim_times[0])
-        msg = MujocoState()
+        msg = MujocoHz()
         msg.hz = measured_hz
-        self.mujoco_state_publisher.publish(msg)
+        self.mujoco_hz_publisher.publish(msg)
 
 
 def main(args=None):

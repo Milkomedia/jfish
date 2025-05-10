@@ -17,9 +17,7 @@ TeensyNode::TeensyNode() : Node("teensy_node") {
   this->get_parameter("mode", mode_);  // store into member
 
   if (mode_ == "real"){
-    allocator_subscription_ = this->create_subscription<allocator_interfaces::msg::PwmVal>("motor_cmd", 1, std::bind(&TeensyNode::allocatorCallback_save_to_CAN_buff, this, std::placeholders::_1));
-    can_transmission_timer_ = this->create_wall_timer(std::chrono::microseconds(500), std::bind(&TeensyNode::CAN_transmit, this));
-
+    
     // Create RAW socket for SocketCAN.
     sock_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (sock_ < 0) {
@@ -43,6 +41,9 @@ TeensyNode::TeensyNode() : Node("teensy_node") {
     }
 
     RCLCPP_INFO(this->get_logger(), "[CAN CONNECTED.]");
+
+    allocator_subscription_ = this->create_subscription<allocator_interfaces::msg::PwmVal>("motor_cmd", 1, std::bind(&TeensyNode::allocatorCallback_save_to_CAN_buff, this, std::placeholders::_1));
+    can_transmission_timer_ = this->create_wall_timer(std::chrono::microseconds(500), std::bind(&TeensyNode::CAN_transmit, this));
   }
   else if (mode_ == "sim"){
     allocator_subscription_ = this->create_subscription<allocator_interfaces::msg::PwmVal>("motor_cmd", 1, std::bind(&TeensyNode::allocatorCallback_MUJ_send, this, std::placeholders::_1));

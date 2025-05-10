@@ -89,6 +89,10 @@ void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasure
   x_[0] = msg->pos[0]; y_[0] = msg->pos[1]; z_[0] = msg->pos[2];
   x_[1] = msg->vel[0]; y_[1] = msg->vel[1]; z_[1] = msg->vel[2];
   x_[2] = msg->acc[0]; y_[2] = msg->acc[1]; z_[2] = msg->acc[2];
+
+  state_->J << 0.058065042,  0.000104275,  -0.006291258,
+               0.000104275,  0.069250561,  -0.000083225,
+               -0.006291258, -0.000083225, 0.038730723;
 }
 
 void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg) {

@@ -17,6 +17,7 @@ struct state_t
   Vector3 a = Vector3::Zero(); /**< Acceleration */
   Matrix3 R = Matrix3::Identity(); /**< Attitude in SO(3) */
   Vector3 W = Vector3::Zero(); /**< Body angular velocity */
+  Matrix3 J = Matrix3::Zero();  /**< Inertia matrix for the rover */
 };
 
 class command_t{

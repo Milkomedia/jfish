@@ -56,9 +56,6 @@ inline IntegralParameters getIntegralParameters() {
 
 inline UAVParameters getUAVParameters() {
   UAVParameters param;
-  param.J << 0.058065042,  0.000104275,  -0.006291258,
-             0.000104275,  0.069250561,  -0.000083225,
-             -0.006291258, -0.000083225, 0.038730723;
   param.m = 4.751729;
   param.g = 9.80665;
   return param;

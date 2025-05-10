@@ -14,6 +14,7 @@ set(msg_files
   "msg/MotorThrust.msg"
   "msg/MuJoCoMeas.msg"
   "msg/MujocoState.msg"
+  "msg/MujocoHz.msg"
 )
 
 # Generate interfaces

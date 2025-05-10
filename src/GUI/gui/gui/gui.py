@@ -10,7 +10,7 @@ import pyqtgraph as pg
 
 from controller_interfaces.msg import ControllerDebugVal
 from allocator_interfaces.msg import AllocatorDebugVal
-from mujoco_interfaces.msg import MujocoState
+from mujoco_interfaces.msg import MujocoHz
 from math import pi
 
 
@@ -22,7 +22,7 @@ class GUI_NODE(Node):
         # Subscription
         self.controller_sub = self.create_subscription(ControllerDebugVal, '/controller_info', self.controller_callback, 1)
         self.allocator_sub = self.create_subscription(AllocatorDebugVal, '/allocator_info', self.allocator_callback, 1)
-        self.mujoco_sub = self.create_subscription(MujocoState, '/mujoco_state', self.mujoco_callback, 1)
+        self.mujoco_sub = self.create_subscription(MujocoHz, '/mujoco_hz', self.mujoco_callback, 1)
 
     def controller_callback(self, msg):
         self.gui.controller_update_signal.emit(msg)
@@ -36,7 +36,7 @@ class GUI_NODE(Node):
 class DebugGUI(QWidget):
     controller_update_signal = pyqtSignal(ControllerDebugVal)
     allocator_update_signal = pyqtSignal(AllocatorDebugVal)
-    mujoco_update_signal = pyqtSignal(MujocoState)
+    mujoco_update_signal = pyqtSignal(MujocoHz)
 
     def __init__(self, node):
         super().__init__()

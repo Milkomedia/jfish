@@ -99,9 +99,9 @@ void fdcl::control::attitude_control(void){
   M = - kR * eR \
       - kW * eW \
       - kI * eIR.error \
-      + hat(state->R.transpose() * command->Rd * command->Wd) * J * \
+      + hat(state->R.transpose() * command->Rd * command->Wd) * state->J * \
             state->R.transpose() * command->Rd * command->Wd \
-      + J * state->R.transpose() * command->Rd * command->Wd_dot;
+      + state->J * state->R.transpose() * command->Rd * command->Wd_dot;
 }
 
 void fdcl::control::attitude_control_decoupled_yaw(void){
@@ -137,21 +137,21 @@ void fdcl::control::attitude_control_decoupled_yaw(void){
   Vector3 tau;
   tau = -kR(0, 0) * eb \
         - kW(0, 0) * ew \
-        - J(0, 0) * b3.transpose() * W_12d * b3_dot \
-        - J(0, 0) * hat(b3) * hat(b3) * W_12d_dot;
+        - state->J(0, 0) * b3.transpose() * W_12d * b3_dot \
+        - state->J(0, 0) * hat(b3) * hat(b3) * W_12d_dot;
 
   tau += -kI * eI1.error * b1 - kI * eI2.error * b2;
 
   double M1, M2, M3;
 
   // control moment around b1 axis - roll - eq (24)
-  M1 = b1.transpose() * tau + J(2, 2) * state->W(2) * state->W(1);
+  M1 = b1.transpose() * tau + state->J(2, 2) * state->W(2) * state->W(1);
 
   // control moment around b2 axis - pitch - eq (24)
-  M2 = b2.transpose() * tau - J(2, 2) * state->W(2) * state->W(0);
+  M2 = b2.transpose() * tau - state->J(2, 2) * state->W(2) * state->W(0);
 
   // control moment around b3 axis - yaw - eq (52)
-  M3 = -ky * ey - kwy * ewy + J(2, 2) * command->wc3_dot;
+  M3 = -ky * ey - kwy * ewy + state->J(2, 2) * command->wc3_dot;
   M3 += -kyI * eIy.error;
 
   M << M1, M2, M3;
@@ -199,7 +199,7 @@ void fdcl::control::load_config(void){
   kW(0,0) = cp.kW[0];
   kW(1,1) = cp.kW[1];
   kW(2,2) = cp.kW[2];
-  
-  m    = up.m;
-  g    = up.g;
+
+  this->m = up.m;
+  this->g = up.g;
 }

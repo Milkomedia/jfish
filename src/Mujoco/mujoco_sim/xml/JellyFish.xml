@@ -49,28 +49,28 @@
       <site name="imu" pos="0 0 0" quat="1 0 0 0"/>
       <geom class="collision" size="0.12 0.12 .02" pos="0 0 0" contype="1" conaffinity="2"/>
 
-    <body name="Arm3_Link1" pos="0.0848528 0.0848528 0" quat="0.382683 0 0 -0.92388">
+    <body name="Arm1_Link1" pos="0.0848528 0.0848528 0" quat="0.382683 0 0 -0.92388">
       <inertial pos="-0.0628864 -0.00030071 0.0115046" quat="0.432962 0.567439 0.525068 0.46353" mass="0.374106" diaginertia="0.00164276 0.00160619 0.000141896"/>
       <joint name="Arm3_joint1" pos="0 0 0" axis="0 0 1"/>
-      <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link1" contype="1" conaffinity="2"/>
-      <body name="Arm3_Link2" pos="-0.134 0 0" quat="0.707107 0.707107 0 0">
+      <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link1" contype="1" conaffinity="2"/>
+      <body name="Arm1_Link2" pos="-0.134 0 0" quat="0.707107 0.707107 0 0">
         <inertial pos="-0.0812353 0 0.00033993" quat="0.501818 0.498175 0.498175 0.501818" mass="0.13658" diaginertia="0.000183 0.000171008 2.96325e-05"/>
         <joint name="Arm3_joint2" pos="0 0 0" axis="0 0 -1"/>
-        <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link2" contype="1" conaffinity="2"/>
-        <body name="Arm3_Link3" pos="-0.115 0 0">
+        <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link2" contype="1" conaffinity="2"/>
+        <body name="Arm1_Link3" pos="-0.115 0 0">
           <inertial pos="-0.0545139 -0.00013889 0.00012511" quat="0.503095 0.499879 0.497035 0.499972" mass="0.0415148" diaginertia="4.29713e-05 3.86412e-05 7.76758e-06"/>
           <joint name="Arm3_joint3" pos="0 0 0" axis="0 0 -1"/>
-          <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link3" contype="1" conaffinity="2"/>
-          <body name="Arm3_Link4" pos="-0.11 0 0">
+          <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link3" contype="1" conaffinity="2"/>
+          <body name="Arm1_Link4" pos="-0.11 0 0">
             <inertial pos="-0.0120002 0.0005559 -0.000556" quat="0.270139 0.652173 0.271057 0.654388" mass="0.102003" diaginertia="2.88701e-05 2.767e-05 2.05299e-05"/>
             <joint name="Arm3_joint4" pos="0 0 0" axis="0 0 -1"/>
-            <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link4" contype="1" conaffinity="2"/>
-            <body name="Arm3_Link5" pos="-0.024 0 0" quat="0 0 0.707107 0.707107">
+            <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link4" contype="1" conaffinity="2"/>
+            <body name="Arm1_Link5" pos="-0.024 0 0" quat="0 0 0.707107 0.707107">
               <inertial pos="0.0497922 0 0.00013454" quat="1 0 0.000236013 0" mass="0.3734" diaginertia="0.00364513 0.0019397 0.00192912"/>
-              <site name="thrust3" pos="0.071 0 0"/>
-              <site name="torque3" pos="0.071 0 0"/>
+              <site name="thrust1" pos="0.071 0 0"/>
+              <site name="torque1" pos="0.071 0 0"/>
               <joint name="Arm3_joint5" pos="0 0 0" axis="0 0 -1"/>
-              <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link5" contype="1" conaffinity="2"/>
+              <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link5" contype="1" conaffinity="2"/>
             </body>
           </body>
         </body>
@@ -103,28 +103,28 @@
         </body>
       </body>
     </body>
-    <body name="Arm1_Link1" pos="-0.084853 -0.084853 0" quat="0.923879 0 0 0.382684">
+    <body name="Arm3_Link1" pos="-0.084853 -0.084853 0" quat="0.923879 0 0 0.382684">
       <inertial pos="-0.0628864 -0.00030071 0.0115046" quat="0.432962 0.567439 0.525068 0.46353" mass="0.374106" diaginertia="0.00164276 0.00160619 0.000141896"/>
       <joint name="Arm1_joint1" pos="0 0 0" axis="0 0 1"/>
-      <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link1" contype="1" conaffinity="2"/>
-      <body name="Arm1_Link2" pos="-0.134 0 0" quat="0.707107 0.707107 0 0">
+      <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link1" contype="1" conaffinity="2"/>
+      <body name="Arm3_Link2" pos="-0.134 0 0" quat="0.707107 0.707107 0 0">
         <inertial pos="-0.0812353 0 0.00033993" quat="0.501818 0.498175 0.498175 0.501818" mass="0.13658" diaginertia="0.000183 0.000171008 2.96325e-05"/>
         <joint name="Arm1_joint2" pos="0 0 0" axis="0 0 -1"/>
-        <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link2" contype="1" conaffinity="2"/>
-        <body name="Arm1_Link3" pos="-0.115 0 0">
+        <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link2" contype="1" conaffinity="2"/>
+        <body name="Arm3_Link3" pos="-0.115 0 0">
           <inertial pos="-0.0545139 -0.00013889 0.00012511" quat="0.503095 0.499879 0.497035 0.499972" mass="0.0415148" diaginertia="4.29713e-05 3.86412e-05 7.76758e-06"/>
           <joint name="Arm1_joint3" pos="0 0 0" axis="0 0 -1"/>
-          <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link3" contype="1" conaffinity="2"/>
-          <body name="Arm1_Link4" pos="-0.110001 0 0">
+          <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link3" contype="1" conaffinity="2"/>
+          <body name="Arm3_Link4" pos="-0.110001 0 0">
             <inertial pos="-0.0120002 0.0005559 -0.000556" quat="0.270139 0.652173 0.271057 0.654388" mass="0.102003" diaginertia="2.88701e-05 2.767e-05 2.05299e-05"/>
             <joint name="Arm1_joint4" pos="0 0 0" axis="0 0 -1"/>
-            <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link4" contype="1" conaffinity="2"/>
-            <body name="Arm1_Link5" pos="-0.0239992 0 0" quat="0 0 -0.707107 -0.707107">
+            <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link4" contype="1" conaffinity="2"/>
+            <body name="Arm3_Link5" pos="-0.0239992 0 0" quat="0 0 -0.707107 -0.707107">
               <inertial pos="0.0497922 0 0.00013454" quat="1 0 0.000236013 0" mass="0.3734" diaginertia="0.00364513 0.0019397 0.00192912"/>
-              <site name="thrust1" pos="0.071 0 0"/>
-              <site name="torque1" pos="0.071 0 0"/>
+              <site name="thrust3" pos="0.071 0 0"/>
+              <site name="torque3" pos="0.071 0 0"/>
               <joint name="Arm1_joint5" pos="0 0 0" axis="0 0 -1"/>
-              <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm1_Link5" contype="1" conaffinity="2"/>
+              <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="Arm3_Link5" contype="1" conaffinity="2"/>
             </body>
           </body>
         </body>
