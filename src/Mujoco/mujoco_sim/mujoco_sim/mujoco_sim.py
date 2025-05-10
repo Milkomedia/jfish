@@ -14,6 +14,7 @@ import time
 from collections import deque
 
 import signal
+import numpy as np
 
 class MuJoCoSimulatorNode(Node):
     def __init__(self, executor):
@@ -156,7 +157,31 @@ class MuJoCoSimulatorNode(Node):
         rel_y = y - sy
         rel_z = z - sz
 
-        # ------- INERTIA ------ #
+        # ==================  J (3×3 inertia about global COM) 계산  ==================
+        # 1) 전체 질량과 COM
+        masses = self.model.body_mass[1:]              # body 0 = world → 제외
+        x_pos  = self.data.xpos[1:]                    # 각 body COM 위치 (world)
+        total_m = np.sum(masses)
+        com     = np.average(x_pos, axis=0, weights=masses)
+
+        # 2) 회전관성 합산 (Parallel-axis theorem 포함)
+        J_world = np.zeros((3, 3))
+        eye3    = np.eye(3)
+        for i in range(1, self.model.nbody):
+            m_i  = self.model.body_mass[i]
+            # local principal inertia (body frame) → world frame
+            R_i  = self.data.xmat[i].reshape(3, 3)         # body-to-world rot
+            I_i  = np.diag(self.model.body_inertia[i])     # diag → matrix
+            I_w  = R_i @ I_i @ R_i.T                       # rotate inertia
+
+            r    = self.data.xpos[i] - com                 # vector body-COM
+            J_world += I_w + m_i * ((np.dot(r, r)) * eye3 - np.outer(r, r))
+
+        # 3) 실시간 출력 (원한다면 10 Hz 등으로 rate-limit 가능)
+        self.get_logger().info(
+            "\nCurrent inertia J (world frame, about system COM):\n"
+            f"{J_world}"
+        )
         
         
     def publish_mujoco_state(self):
