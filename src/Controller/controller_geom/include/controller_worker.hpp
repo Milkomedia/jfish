@@ -11,6 +11,7 @@
 #include "controller_interfaces/msg/controller_debug_val.hpp"
 #include "mocap_interfaces/msg/mocap_measured.hpp"
 #include "imu_interfaces/msg/imu_measured.hpp"
+#include "mujoco_interfaces/msg/mujoco_state.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
 
 #include "fdcl/control.hpp"
@@ -40,6 +41,7 @@ private:
   void sbusCallback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg);
   void imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg);
+  void mujocoCallback(const mujoco_interfaces::msg::MujocoState::SharedPtr msg);
   void controller_timer_callback();
   void heartbeat_timer_callback();
   void debugging_timer_callback();
@@ -48,6 +50,7 @@ private:
   rclcpp::Subscription<sbus_interfaces::msg::SbusSignal>::SharedPtr sbus_subscription_;
   rclcpp::Subscription<mocap_interfaces::msg::MocapMeasured>::SharedPtr optitrack_mea_subscription_;
   rclcpp::Subscription<imu_interfaces::msg::ImuMeasured>::SharedPtr imu_mea_subscription_;
+  rclcpp::Subscription<mujoco_interfaces::msg::MujocoState>::SharedPtr mujoco_subscription_;
 
   rclcpp::Publisher<controller_interfaces::msg::ControllerOutput>::SharedPtr controller_publisher_;
   

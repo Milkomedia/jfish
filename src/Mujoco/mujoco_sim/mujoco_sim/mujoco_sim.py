@@ -145,44 +145,58 @@ class MuJoCoSimulatorNode(Node):
             a4_q = a4_q
         )
         self.mujoco_meas_publisher.publish(msg)
-        
-        com_arr = self.data.subtree_com[self.body_id]
-        x, y, z = float(com_arr[0]), float(com_arr[1]), float(com_arr[2])
 
-        site_pos = self.data.site_xpos[self.site_id]
-        sx, sy, sz = float(site_pos[0]), float(site_pos[1]), float(site_pos[2])
+        # ==================  CoM_bias (about imu site)  ==================
 
-        # imu 기준 COM 오프셋 벡터
-        rel_x = x - sx
-        rel_y = y - sy
-        rel_z = z - sz
+        # a) global CoM
+        x_coms   = self.data.xipos[1:]
+        masses   = self.model.body_mass[1:]
+        com_world = np.average(x_coms, axis=0, weights=masses)
 
-        # ==================  J (3×3 inertia about global COM) 계산  ==================
-        # 1) 전체 질량과 COM
-        masses = self.model.body_mass[1:]              # body 0 = world → 제외
-        x_pos  = self.data.xpos[1:]                    # 각 body COM 위치 (world)
-        total_m = np.sum(masses)
-        com     = np.average(x_pos, axis=0, weights=masses)
+        # b) IMU pos·attitude
+        imu_pos = self.data.site_xpos[self.site_id]
+        imu_R   = self.data.site_xmat[self.site_id].reshape(3, 3)
 
-        # 2) 회전관성 합산 (Parallel-axis theorem 포함)
+        # c) CoM bias wrt. imu site
+        bias_world = com_world - imu_pos
+        bias_imu   = imu_R.T @ bias_world
+
+        # ==================  J (3×3 inertia about global COM)  ==================
+        # 1) Compute global center of mass (world frame)
+        masses     = self.model.body_mass[1:]          # exclude body 0 (world)
+        x_coms     = self.data.xipos[1:]               # each body CoM in world frame
+        com_world  = np.average(x_coms, axis=0, weights=masses)
+
+        # 2) Compute system inertia about CoM (world frame)
         J_world = np.zeros((3, 3))
         eye3    = np.eye(3)
+
         for i in range(1, self.model.nbody):
-            m_i  = self.model.body_mass[i]
-            # local principal inertia (body frame) → world frame
-            R_i  = self.data.xmat[i].reshape(3, 3)         # body-to-world rot
-            I_i  = np.diag(self.model.body_inertia[i])     # diag → matrix
-            I_w  = R_i @ I_i @ R_i.T                       # rotate inertia
+            # a) Rotate local principal inertia to world frame
+            m_i   = self.model.body_mass[i]
+            R_i   = self.data.xmat[i].reshape(3, 3)         # body-to-world rotation
+            I_i   = np.diag(self.model.body_inertia[i])     # principal inertia at CoM
+            I_w   = R_i @ I_i @ R_i.T                       # inertia in world axes
 
-            r    = self.data.xpos[i] - com                 # vector body-COM
-            J_world += I_w + m_i * ((np.dot(r, r)) * eye3 - np.outer(r, r))
+            # b) Parallel-axis term: distance from global CoM to link CoM
+            r_i   = self.data.xipos[i] - com_world          # vector from system CoM to link CoM
+            J_pa  = m_i * ((np.dot(r_i, r_i) * eye3) - np.outer(r_i, r_i))
 
-        # 3) 실시간 출력 (원한다면 10 Hz 등으로 rate-limit 가능)
-        self.get_logger().info(
-            "\nCurrent inertia J (world frame, about system COM):\n"
-            f"{J_world}"
-        )
-        
+            # c) Sum up
+            J_world += I_w + J_pa
+
+        # 3) Transform J into IMU‐aligned frame with origin at CoM
+        #    - imu_R_world: rotation from IMU frame to world frame
+        #    - so J_imu = R^T * J_world * R 
+        imu_R_world = self.data.site_xmat[self.site_id].reshape(3, 3)
+        J_imu       = imu_R_world.T @ J_world @ imu_R_world
+
+        # publish to controller Node
+        state_msg = MujocoState()
+        state_msg.inertia = J_imu.flatten().tolist()
+        state_msg.com_bias = bias_imu.tolist()
+        self.mujoco_state_publisher.publish(state_msg)
+
         
     def publish_mujoco_state(self):
         measured_hz = len(self._sim_times) / (self._sim_times[-1] - self._sim_times[0])

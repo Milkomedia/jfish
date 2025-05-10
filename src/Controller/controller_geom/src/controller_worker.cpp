@@ -11,14 +11,15 @@ ControllerNode::ControllerNode()
    fdcl_controller_(state_, command_)
 {
   // Subscriptions
-  sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("sbus_signal", 1, std::bind(&ControllerNode::sbusCallback, this, std::placeholders::_1));
-  optitrack_mea_subscription_ = this->create_subscription<mocap_interfaces::msg::MocapMeasured>("optitrack_mea", 1, std::bind(&ControllerNode::optitrackCallback, this, std::placeholders::_1));
-  imu_mea_subscription_ = this->create_subscription<imu_interfaces::msg::ImuMeasured>("imu_mea", 1, std::bind(&ControllerNode::imuCallback, this, std::placeholders::_1));
-
+  sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("/sbus_signal", 1, std::bind(&ControllerNode::sbusCallback, this, std::placeholders::_1));
+  optitrack_mea_subscription_ = this->create_subscription<mocap_interfaces::msg::MocapMeasured>("/optitrack_mea", 1, std::bind(&ControllerNode::optitrackCallback, this, std::placeholders::_1));
+  imu_mea_subscription_ = this->create_subscription<imu_interfaces::msg::ImuMeasured>("/imu_mea", 1, std::bind(&ControllerNode::imuCallback, this, std::placeholders::_1));
+  mujoco_subscription_ = this->create_subscription<mujoco_interfaces::msg::MujocoState>("/mujoco_state", 1, std::bind(&ControllerNode::mujocoCallback, this, std::placeholders::_1));
+ 
   // Publishers
-  controller_publisher_ = this->create_publisher<controller_interfaces::msg::ControllerOutput>("controller_output", 1);
-  heartbeat_publisher_  = this->create_publisher<watchdog_interfaces::msg::NodeState>("controller_state", 1);
-  debug_val_publisher_  = this->create_publisher<controller_interfaces::msg::ControllerDebugVal>("controller_info", 1);
+  controller_publisher_ = this->create_publisher<controller_interfaces::msg::ControllerOutput>("/controller_output", 1);
+  heartbeat_publisher_  = this->create_publisher<watchdog_interfaces::msg::NodeState>("/controller_state", 1);
+  debug_val_publisher_  = this->create_publisher<controller_interfaces::msg::ControllerDebugVal>("/controller_info", 1);
 
   // Timers
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ControllerNode::heartbeat_timer_callback, this));
@@ -89,10 +90,6 @@ void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasure
   x_[0] = msg->pos[0]; y_[0] = msg->pos[1]; z_[0] = msg->pos[2];
   x_[1] = msg->vel[0]; y_[1] = msg->vel[1]; z_[1] = msg->vel[2];
   x_[2] = msg->acc[0]; y_[2] = msg->acc[1]; z_[2] = msg->acc[2];
-
-  state_->J << 0.058065042,  0.000104275,  -0.006291258,
-               0.000104275,  0.069250561,  -0.000083225,
-               -0.006291258, -0.000083225, 0.038730723;
 }
 
 void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg) {
@@ -130,6 +127,14 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   roll_[0]  = std::atan2(2.0*(w*x + y*z), 1.0 - 2.0*(x*x + y*y));
   pitch_[0] = std::asin (2.0*(w*y - z*x));
   yaw_[0]   = std::atan2(2.0*(w*z + x*y), 1.0 - 2.0*(y*y + z*z));
+}
+
+void ControllerNode::mujocoCallback(const mujoco_interfaces::msg::MujocoState::SharedPtr msg) {
+  // Extract the 3×3 inertia matrix (row-major) from the incoming message
+  const auto &in = msg->inertia;
+  state_->J << in[0], in[1], in[2],
+               in[3], in[4], in[5],
+               in[6], in[7], in[8];
 }
 
 void ControllerNode::heartbeat_timer_callback() {
