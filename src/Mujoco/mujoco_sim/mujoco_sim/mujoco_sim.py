@@ -26,7 +26,19 @@ class MuJoCoSimulatorNode(Node):
         scene_file_path = os.path.join(package_share_dir, 'xml', 'scene.xml')
         self.model = mujoco.MjModel.from_xml_path(scene_file_path)
         self.data = mujoco.MjData(self.model)
-        self.model.opt.timestep = 0.002  # 1kHz simulation frequency
+        self.model.opt.timestep = 0.001  # 1kHz simulation frequency
+
+        # xml body&site ids..
+        self.body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, b"BODY")
+        self.site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE,  b"imu")
+
+        # — thread‐safe access to self.data
+        self.data_lock = threading.Lock()
+
+        # hz measurements
+        self._sim_times = deque(maxlen=1200)
+        now = time.monotonic()
+        self._sim_times.append(now)
 
         # Initialize motor thrust and moments
         self.motor_thrusts = [0.0, 0.0, 0.0, 0.0]
@@ -36,27 +48,22 @@ class MuJoCoSimulatorNode(Node):
         self.a3_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
         self.a4_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
 
-        self.body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, b"BODY")
-        self.site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE,  b"imu")
-
-        # Timer to run the simulation at 1ms intervals
-        self._sim_times = deque(maxlen=1200)
-        now = time.monotonic()
-        self._sim_times.append(now)
-        self.timer = self.create_timer(0.002, self.run_simulation)  # 1ms interval (1kHz)
-
-        # Start MuJoCo viewer in a separate thread
+        # Start MuJoCo viewer
         self.viewer_thread = threading.Thread(target=self.run_viewer, daemon=True)
         self.data_lock = threading.Lock()
         self.viewer_thread.start()
+
+        # Publish /mujoco_state (Hz)
+        self.create_timer(0.1, self.publish_mujoco_state)
 
         # publishers
         self.mujoco_meas_publisher = self.create_publisher(MuJoCoMeas, '/mujoco_meas', 1)
         self.mujoco_hz_publisher = self.create_publisher(MujocoHz, '/mujoco_hz', 1)
         self.mujoco_state_publisher = self.create_publisher(MujocoState, '/mujoco_state', 1)
 
-        # Timer to publish /mujoco_state
-        self.create_timer(0.1, self.publish_mujoco_state)
+        # Start MuJoCo SIM
+        self.sim_thread = threading.Thread(target=self.sim_loop, daemon=True)
+        self.sim_thread.start()
 
         # Start Subscriber after some delay
         self._delayed_timer = self.create_timer(3.0, self._start_sub)
@@ -79,32 +86,43 @@ class MuJoCoSimulatorNode(Node):
         self.a3_des = msg.a3_des
         self.a4_des = msg.a4_des
 
-    def run_simulation(self):
-        now = time.monotonic()
-        self._sim_times.append(now)
-        
-        cutoff = now - 1.0
-        while self._sim_times and self._sim_times[0] < cutoff: self._sim_times.popleft()
+    def sim_loop(self):
 
-        # Set control inputs for MuJoCo
-        with self.data_lock:
-            self.data.ctrl[0:4] = self.motor_thrusts
-            self.data.ctrl[4:8] = self.motor_moments
-            self.data.ctrl[8:13] = self.a1_des
-            self.data.ctrl[13:18] = self.a2_des
-            self.data.ctrl[18:23] = self.a3_des
-            self.data.ctrl[23:28] = self.a4_des
+        dt = self.model.opt.timestep
 
-            # Perform one simulation step (1kHz)
-            mujoco.mj_step(self.model, self.data)
+        while rclpy.ok():
+            now = time.monotonic()
+            # — measure actual sim Hz over 1 s window
+            self._sim_times.append(now)
+            cutoff = now - 1.0
+            while self._sim_times and self._sim_times[0] < cutoff:
+                self._sim_times.popleft()
 
-            # Publish the drone's current state
-            self.publish_mujoco_meas()
+            with self.data_lock:
+                # — set control inputs
+                self.data.ctrl[0:4]  = self.motor_thrusts
+                self.data.ctrl[4:8]  = self.motor_moments
+                self.data.ctrl[8:13] = self.a1_des
+                self.data.ctrl[13:18]= self.a2_des
+                self.data.ctrl[18:23]= self.a3_des
+                self.data.ctrl[23:28]= self.a4_des
+
+                # — perform one simulation step (1 kHz)
+                mujoco.mj_step(self.model, self.data)
+
+                # — publish current state (same as before)
+                self.publish_mujoco_meas()
+
+            # — maintain steady 1 kHz loop
+            elapsed = time.monotonic() - now
+            if elapsed < dt: time.sleep(dt - elapsed)
+            # else: self.get_logger().warn(f"Step overrun: {elapsed:.6f}s")
 
     def run_viewer(self):
-        # Launch MuJoCo viewer in passive mode (20Hz update rate)
+        # Launch MuJoCo viewer in passive mode
         with mujoco.viewer.launch_passive(self.model, self.data) as viewer:
-            while viewer.is_running():
+            while viewer.is_running() and rclpy.ok():
+                time.sleep(0.02)
                 with self.data_lock:
                     viewer.sync()  # Sync the viewer to the current simulation state
 
@@ -197,9 +215,15 @@ class MuJoCoSimulatorNode(Node):
         state_msg.com_bias = bias_imu.tolist()
         self.mujoco_state_publisher.publish(state_msg)
 
-        
     def publish_mujoco_state(self):
-        measured_hz = len(self._sim_times) / (self._sim_times[-1] - self._sim_times[0])
+        # measured_hz = len(self._sim_times) / (self._sim_times[-1] - self._sim_times[0])
+
+        if len(self._sim_times) < 2 or self._sim_times[-1] == self._sim_times[0]:
+            measured_hz = 0.0
+        else:
+            duration = self._sim_times[-1] - self._sim_times[0]
+            measured_hz = len(self._sim_times) / duration
+
         msg = MujocoHz()
         msg.hz = measured_hz
         self.mujoco_hz_publisher.publish(msg)

@@ -14,6 +14,7 @@
   <exec_depend>controller_interfaces</exec_depend>
   <exec_depend>sbus_interfaces</exec_depend>
   <exec_depend>imu_interfaces</exec_depend>
+  <exec_depend>mujoco_interfaces</exec_depend>
   <exec_depend>mocap_interfaces</exec_depend>
   <exec_depend>watchdog_interfaces</exec_depend>
 
