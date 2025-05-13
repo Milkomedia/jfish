@@ -60,8 +60,8 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   sbus_chnl_[8] = msg->ch[11]; // right-dial
   
   // remap SBUS data to double <pos x,y,z in [m]>
-  ref_[0] = static_cast<double>(sbus_chnl_[0] - 1024) / 336.;  // [-2, 2] in m
-  ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) / 336.;  // [-2, 2] in m
+  ref_[0] = static_cast<double>(sbus_chnl_[0] - 1024) * 336.;  // [-2, 2] in m
+  ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) * 336.;  // [-2, 2] in m
   ref_[2] = static_cast<double>(sbus_chnl_[3] -  352) / 896.; // [ 0, 1.5] in m (?)
 
   // remap SBUS data to double <yaw-heading in [rad]>
