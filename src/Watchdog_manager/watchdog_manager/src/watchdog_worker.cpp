@@ -53,9 +53,9 @@ void WatchDogNode::commonCallback(const std::string & node_name, const watchdog_
       last_time_[node_name]  = now;
     }
     else{
-      RCLCPP_ERROR(this->get_logger(), " >> SHUT DOWN << : [%s] started badly.", node_name.c_str());
       handshake_checked_ = true; // pass handshake timeout check
       failure_detected_ = true;
+      RCLCPP_ERROR(this->get_logger(), " >> SHUT DOWN << : [%s] started badly.(get %u)", node_name.c_str(), msg->state);
     }
     return;
   }

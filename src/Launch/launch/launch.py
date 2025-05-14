@@ -2,7 +2,7 @@ import os
 os.environ['RCUTILS_CONSOLE_OUTPUT_FORMAT'] = '{message}'
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, LogInfo
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, LogInfo, TimerAction
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
@@ -28,19 +28,19 @@ def generate_launch_description():
     mode = LaunchConfiguration('mode')
 
     nodes = [
-        # Watchdog Node
-        Node(
-            package='watchdog_manager',
-            executable='watchdog_worker',
-            name='watchdog_node',
-        ),
-        
         # MuJoCo Node (Run only when mode==sim)
         Node(
             package='mujoco_sim',
             executable='mujoco_node',
             name='mujoco_node',
             condition=IfCondition(PythonExpression(["'", mode, "' == 'sim'"])),
+        ),
+
+        # Watchdog Node
+        Node(
+            package='watchdog_manager',
+            executable='watchdog_worker',
+            name='watchdog_node',
         ),
 
         # Optitrack Node
