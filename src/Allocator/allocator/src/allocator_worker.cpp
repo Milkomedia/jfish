@@ -130,9 +130,9 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   // resolve f[N] to pwm[0.0~1.0]
   for (int i = 0; i < 4; ++i) 
   {
-      if (f(i) > pwm_beta_) pwm(i) = std::sqrt((f(i) - pwm_beta_) / pwm_alpha_);
-      else pwm(i) = 0.0; // safe fallback
-      pwm(i) = std::max(0.0, std::min(1.0, pwm(i)));
+    if (f(i) > pwm_beta_) pwm(i) = std::sqrt((f(i) - pwm_beta_) / pwm_alpha_);
+    else pwm(i) = 0.0; // safe fallback
+    pwm(i) = std::max(0.0, std::min(1.0, pwm(i)));
   }
   // pwm = ((f.array() - pwm_beta_).array() / pwm_alpha_).cwiseSqrt().matrix();
   // pwm = pwm.cwiseMax(0.0).cwiseMin(1.0); // this clamps to [0, 1]

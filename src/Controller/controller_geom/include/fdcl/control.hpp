@@ -49,6 +49,7 @@ public:
   void attitude_control_decoupled_yaw(void);
   void position_control(void);
   void output_fM(double &f, Vector3 &M);
+  void output_debug(Vector3 &X);
 
 private:
   const double eX_norm_max_ = 2.0; /**< Saturating term of position error */

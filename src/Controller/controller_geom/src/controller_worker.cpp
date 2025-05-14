@@ -47,6 +47,12 @@ void ControllerNode::controller_timer_callback() {
   msg.force = f_out;
   msg.moment = {M_out[0], -M_out[1], -M_out[2]};
   controller_publisher_->publish(msg);
+
+  // Vector3 X = Vector3::Zero();
+  // fdcl_controller_.output_debug(X);
+  // RCLCPP_INFO(this->get_logger(),
+  //             "[x=%.6f, y=%.6f, z=%.6f]",
+  //             X(0), X(1), X(2));
 }
 
 void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {

@@ -32,9 +32,8 @@ using Eigen::MatrixXd;
 #define yc 0.00 // Center of Mass position [m]
 #define zc 0.00 // Center of Mass position [m]
 
-#define pwm_alpha_ 46.5435  // F = a * pwm^2 - b
-#define pwm_beta_ 8.6111    // F = a * pwm^2 - b
-
+#define pwm_alpha_ 60.  // F = a * pwm^2 - b
+#define pwm_beta_ 8.    // F = a * pwm^2 - b
 
 class AllocatorWorker : public rclcpp::Node {
 public:

@@ -36,7 +36,7 @@ void fdcl::control::position_control(void){
 
   // position integral terms
   eIX.integrate(c1 * eX + eV, dt); // eq (13)
-  double sat_sigma = 1.8;
+  double sat_sigma = 10.0;
   saturate(eIX.error, -sat_sigma, sat_sigma);
 
   // force 'f' along negative b3-axis - eq (14)
@@ -172,6 +172,11 @@ void fdcl::control::output_fM(double &f, Vector3 &M){
   M = this->M;
 }
 
+void fdcl::control::output_debug(Vector3 &X){
+  X = eIX.error;
+  // X = eV;
+}
+
 void fdcl::control::load_config(void){
   // controller_param.h
   auto cp = controller_param::getControlParameters();
@@ -189,10 +194,12 @@ void fdcl::control::load_config(void){
   kV(1,1) = cp.kV[1];
   kV(2,2) = cp.kV[2];
 
-  c1  = ip.c1; c2  = ip.c2; c3  = ip.c3;
+  kIX = ip.kIX;
+  ki = ip.ki;
   kIR = ip.kIR;
   kI  = ip.kI;
   kyI = ip.kyI;
+  c1  = ip.c1; c2  = ip.c2; c3  = ip.c3;
   
   kR.setZero();
   kR(0,0) = cp.kR[0];
