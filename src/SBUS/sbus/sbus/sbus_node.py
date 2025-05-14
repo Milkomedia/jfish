@@ -23,6 +23,8 @@ class SbusNode(Node):
     self._hb_state = 0                   # initial dummy value
     self._hb_enabled = False             # heartbeat gate
 
+    self.runout_cnt = 0  # when this exceeds 3, kill -> activated
+
     # start timer but gate execution until port-connected
     self._hb_timer = self.create_timer(0.1, self._publish_heartbeat)
     
@@ -81,15 +83,27 @@ class SbusNode(Node):
       msg_channels.ch = channels
       msg_channels.sbus_signal = failsafe_status
 
+      # Less strict kill logic (accounting for sudden warping)
+      if channels[9]!=352 or failsafe_status!=0:
+        if self.runout_cnt > 2:
+          kill_state = True
+          if self._hb_enabled:
+            self._hb_enabled = False
+        else:
+          kill_state = False
+          self.runout_cnt += 1
+          self.get_logger().info(f"SBUS NOT GOOD...")
+          continue
+      else:
+        kill_state = False
+        self.runout_cnt = 0
+
       msg_kill = KillCmd()
-      msg_kill._kill_activated = not (channels[9] == 352 and failsafe_status == 0)
+      msg_kill._kill_activated = kill_state
 
       # Publish
       self.killcmd_publisher_.publish(msg_kill)
       self.channel_publisher_.publish(msg_channels)
-
-      # if kill is activated, cancel heartbeat timer so watchdog will detect failure
-      if msg_kill._kill_activated and self._hb_enabled: self._hb_enabled = False
 
 def main(args=None):
   rclpy.init(args=args)
