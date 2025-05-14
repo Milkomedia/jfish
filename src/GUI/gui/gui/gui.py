@@ -550,8 +550,7 @@ class DebugGUI(QWidget):
                 value.setText(f"{imu_data[j]:.3f}")
 
         # Update Opti measurements
-        neg_z = [-z for z in self.controller_data['opti_z']]
-        for i, opti_data in enumerate([self.controller_data['opti_x'], self.controller_data['opti_y'], neg_z]):
+        for i, opti_data in enumerate([self.controller_data['opti_x'], self.controller_data['opti_y'], self.controller_data['opti_z']]):
             for j, value in enumerate(self.opti_meas[i]):
                 value.setText(f"{opti_data[j]:.3f}")
 

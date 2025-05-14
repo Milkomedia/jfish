@@ -25,8 +25,8 @@ ControllerNode::ControllerNode()
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ControllerNode::heartbeat_timer_callback, this));
   debugging_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ControllerNode::debugging_timer_callback, this));
 
-  command_->xd << 0.0, 0.0, -1.0;
-  command_->b1d << 1.0, 0.0, 0.0;
+  command_->xd << 0.0, 0.0, 0.0;  // I don't know why,,, but
+  command_->b1d << 1.0, 0.0, 0.0; // without this init, drone crashes.
 
   // main-tasking thread
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
@@ -34,6 +34,8 @@ ControllerNode::ControllerNode()
   // initial handshake: immediately send 42 and enable subsequent heartbeat
   hb_state_   = 42;
   hb_enabled_ = true;
+
+  last_r_log_time_ = this->now();
 }
 
 void ControllerNode::controller_timer_callback() {
@@ -43,14 +45,14 @@ void ControllerNode::controller_timer_callback() {
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
   msg.force = f_out;
-  msg.moment = {M_out[0], M_out[1], M_out[2]};
+  msg.moment = {M_out[0], -M_out[1], -M_out[2]};
   controller_publisher_->publish(msg);
 }
 
 void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {
   // save sbus_channel
-  sbus_chnl_[0] = msg->ch[1];  // x command
-  sbus_chnl_[1] = msg->ch[0];  // y command
+  sbus_chnl_[0] = msg->ch[0];  // y command
+  sbus_chnl_[1] = msg->ch[1];  // x command
   sbus_chnl_[2] = msg->ch[3];  // heading command
   sbus_chnl_[3] = msg->ch[2];  // z command
   sbus_chnl_[4] = msg->ch[9];  // kill command
@@ -60,18 +62,20 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   sbus_chnl_[8] = msg->ch[11]; // right-dial
   
   // remap SBUS data to double <pos x,y,z in [m]>
-  ref_[0] = static_cast<double>(sbus_chnl_[0] - 1024) * 336.;  // [-2, 2] in m
-  ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) * 336.;  // [-2, 2] in m
-  ref_[2] = static_cast<double>(sbus_chnl_[3] -  352) / 896.; // [ 0, 1.5] in m (?)
+  ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
+  ref_[1] = static_cast<double>(1024 - sbus_chnl_[1]) * mapping_factor_xy;  // [m]
+  ref_[2] = static_cast<double>(352 - sbus_chnl_[3])  * mapping_factor_z; // [m]
 
   // remap SBUS data to double <yaw-heading in [rad]>
-  double ref_yaw = static_cast<double>(sbus_chnl_[2] - 1024) / 672.;  // [-1, 1]
-  ref_[3] += ref_yaw * 0.003;
+  double delta_yaw = (sbus_chnl_[2] < 1018 || sbus_chnl_[2] > 1030) 
+    ? static_cast<double>(sbus_chnl_[2] - 1024) * mapping_factor_yaw 
+    : 0.0;
+  ref_[3] += delta_yaw;
   ref_[3] = fmod(ref_[3] + M_PI, two_PI);
   if (ref_[3] < 0) {ref_[3] += two_PI;}
   ref_[3] -= M_PI;
   
-  command_->xd << ref_[0], ref_[1], -ref_[2];
+  command_->xd << ref_[0], ref_[1], ref_[2];
   command_->xd_dot.setZero();
   command_->xd_2dot.setZero();
   command_->xd_3dot.setZero();
@@ -83,13 +87,14 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 }
 
 void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg) {
-  state_->x << msg->pos[0], msg->pos[1], msg->pos[2];
-  state_->v << msg->vel[0], msg->vel[1], msg->vel[2];
-  state_->a << msg->acc[0], msg->acc[1], msg->acc[2];
-  
-  x_[0] = msg->pos[0]; y_[0] = msg->pos[1]; z_[0] = msg->pos[2];
-  x_[1] = msg->vel[0]; y_[1] = msg->vel[1]; z_[1] = msg->vel[2];
-  x_[2] = msg->acc[0]; y_[2] = msg->acc[1]; z_[2] = msg->acc[2];
+  // for controller-variable
+  state_->x << msg->pos[0], -msg->pos[1], -msg->pos[2];
+  state_->v << msg->vel[0], -msg->vel[1], -msg->vel[2];
+  state_->a << msg->acc[0], -msg->acc[1], -msg->acc[2];
+  // for debugging-variable
+  x_[0] = msg->pos[0]; y_[0] = -msg->pos[1]; z_[0] = -msg->pos[2];
+  x_[1] = msg->vel[0]; y_[1] = -msg->vel[1]; z_[1] = -msg->vel[2];
+  x_[2] = msg->acc[0]; y_[2] = -msg->acc[1]; z_[2] = -msg->acc[2];
 }
 
 void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg) {
@@ -110,18 +115,36 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   const double wz = w * z;
   
   state_->R(0,0) = 1.0 - 2.0 * (yy + zz);
-  state_->R(0,1) = 2.0 * (xy - wz);
-  state_->R(0,2) = 2.0 * (xz + wy);
-  state_->R(1,0) = 2.0 * (xy + wz);
+  state_->R(0,1) = -2.0 * (xy - wz);
+  state_->R(0,2) = -2.0 * (xz + wy);
+  state_->R(1,0) = -2.0 * (xy + wz);
   state_->R(1,1) = 1.0 - 2.0 * (xx + zz);
   state_->R(1,2) = 2.0 * (yz - wx);
-  state_->R(2,0) = 2.0 * (xz - wy);
+  state_->R(2,0) = -2.0 * (xz - wy);
   state_->R(2,1) = 2.0 * (yz + wx);
   state_->R(2,2) = 1.0 - 2.0 * (xx + yy);
 
+  // auto now = this->now();
+  // if (now - last_r_log_time_ >= rclcpp::Duration::from_seconds(0.1)) {
+  //   RCLCPP_INFO(
+  //     this->get_logger(),
+  //     "R = [%.3f, %.3f, %.3f]\n"
+  //     "    [%.3f, %.3f, %.3f]\n"
+  //     "    [%.3f, %.3f, %.3f]",
+  //     // row 0
+  //     state_->R(0,0), state_->R(0,1), state_->R(0,2),
+  //     // row 1
+  //     state_->R(1,0), state_->R(1,1), state_->R(1,2),
+  //     // row 2
+  //     state_->R(2,0), state_->R(2,1), state_->R(2,2)
+  //   );
+  //   last_r_log_time_ = now;
+  // }
+
+  
   // gyro
-  state_->W << msg->w[0], msg->w[1], msg->w[2];
-  roll_[1] = msg->w[0]; pitch_[1] = msg->w[1]; yaw_[1] = msg->w[2];
+  state_->W << msg->w[0], -msg->w[1], -msg->w[2];
+  roll_[1] = msg->w[0]; pitch_[1] = -msg->w[1]; yaw_[1] = -msg->w[2];
 
   // ZYX Tait–Bryan angles
   roll_[0]  = std::atan2(2.0*(w*x + y*z), 1.0 - 2.0*(x*x + y*y));

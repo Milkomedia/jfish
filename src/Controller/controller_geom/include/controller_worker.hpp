@@ -19,16 +19,13 @@
 
 #define Loop_us 500 // controller thread loop dt [us]
 
-#define POS_CTRL_RANGE_XY 2.0 // pos cmd range mapped to [-k, k]m (x,y)
-#define POS_CTRL_RANGE_Z  2.0 // pos cmd range mapped to [ 0, k]m (z)
+#define CMD_XY_MAX 2.0     // pos cmd range mapped to [-k, k]m (x,y)
+#define CMD_Z_MAX  1.5     // pos cmd range mapped to [ 0, k]m (z)
+#define CMD_YAW_SPD 3.0    // speed at which the yaw command is added.
 
-
-
-constexpr double mapping_factor_xy = POS_CTRL_RANGE_XY / 672.0;
-constexpr double mapping_factor_z  = POS_CTRL_RANGE_Z;
-constexpr double mapping_factor_xy = 672.0 / POS_CTRL_RANGE_XY;
-
-
+constexpr double mapping_factor_xy = CMD_XY_MAX / 672.0;
+constexpr double mapping_factor_z  = CMD_Z_MAX / 1344.0;
+constexpr double mapping_factor_yaw  = CMD_YAW_SPD / 672000.0;
 constexpr double two_PI = 2.0 * M_PI;
 
 class ControllerNode : public rclcpp::Node {
@@ -37,6 +34,8 @@ public:
   ~ControllerNode();
 
 private:
+  rclcpp::Time last_r_log_time_;
+
   fdcl::state_t * state_;
   fdcl::command_t * command_;
 
