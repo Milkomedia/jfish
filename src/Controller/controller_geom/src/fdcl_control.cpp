@@ -30,6 +30,10 @@ void fdcl::control::position_control(void){
   eX = state->x - command->xd;     // position error - eq (11)
   eV = state->v - command->xd_dot; // velocity error - eq (12)
 
+  // if norm(eX) exceeds limit, scale it back
+  double eX_norm = eX.norm();
+  if(eX_norm > eX_norm_max_) {eX = eX * (eX_norm_max_ / eX_norm);}
+
   // position integral terms
   eIX.integrate(c1 * eX + eV, dt); // eq (13)
   double sat_sigma = 1.8;
