@@ -79,7 +79,7 @@ void TeensyNode::CAN_transmit() {
   std::lock_guard<std::mutex> lk(frame_mutex_);
   ssize_t n = write(sock_, &pending_frame_, sizeof(pending_frame_));
   if (n != sizeof(pending_frame_)) {
-    RCLCPP_ERROR(this->get_logger(), ">> CAN transmit ERR <<\n\n [POWER SWITCH OFF RIGHT NOW]\n\n");
+    RCLCPP_ERROR(this->get_logger(), ">> CAN transmit ERR <<\t[POWER OFF RIGHT NOW]\n\n");
   }
 }
 
@@ -203,7 +203,7 @@ void TeensyNode::watchdogCallback(const watchdog_interfaces::msg::NodeState::Sha
       MUJOCO_overriding();
       publish_dummy_zeros_timer_ = this->create_wall_timer(std::chrono::milliseconds(3), std::bind(&TeensyNode::MUJOCO_overriding, this));
     }
-    RCLCPP_INFO(this->get_logger(), "\n >> KILL ACTIVATED BY SBUS. WATCHDOG. <<\n");
+    RCLCPP_INFO(this->get_logger(), "\n >> KILL ACTIVATED BY WATCHDOG. <<\n");
   }
 }
 
