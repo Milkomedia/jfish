@@ -92,13 +92,13 @@ void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasure
   state_->v << msg->vel[0], -msg->vel[1], -msg->vel[2];
   state_->a << msg->acc[0], -msg->acc[1], -msg->acc[2];
   // for debugging-variable
-  x_[0] = msg->pos[0]; y_[0] = -msg->pos[1]; z_[0] = -msg->pos[2];
-  x_[1] = msg->vel[0]; y_[1] = -msg->vel[1]; z_[1] = -msg->vel[2];
-  x_[2] = msg->acc[0]; y_[2] = -msg->acc[1]; z_[2] = -msg->acc[2];
+  x_[0] = msg->pos[0]; y_[0] = msg->pos[1]; z_[0] = msg->pos[2];
+  x_[1] = msg->vel[0]; y_[1] = msg->vel[1]; z_[1] = msg->vel[2];
+  x_[2] = msg->acc[0]; y_[2] = msg->acc[1]; z_[2] = msg->acc[2];
 }
 
 void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg) {
-  // quat -> rot matrix
+  // quat -> R
   const double w = msg->q[0];
   const double x = msg->q[1];
   const double y = msg->q[2];
@@ -124,32 +124,14 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   state_->R(2,1) = 2.0 * (yz + wx);
   state_->R(2,2) = 1.0 - 2.0 * (xx + yy);
 
-  // auto now = this->now();
-  // if (now - last_r_log_time_ >= rclcpp::Duration::from_seconds(0.1)) {
-  //   RCLCPP_INFO(
-  //     this->get_logger(),
-  //     "R = [%.3f, %.3f, %.3f]\n"
-  //     "    [%.3f, %.3f, %.3f]\n"
-  //     "    [%.3f, %.3f, %.3f]",
-  //     // row 0
-  //     state_->R(0,0), state_->R(0,1), state_->R(0,2),
-  //     // row 1
-  //     state_->R(1,0), state_->R(1,1), state_->R(1,2),
-  //     // row 2
-  //     state_->R(2,0), state_->R(2,1), state_->R(2,2)
-  //   );
-  //   last_r_log_time_ = now;
-  // }
-
-  
-  // gyro
+  // gyro (copy to controller-state && gui-sending variable)
   state_->W << msg->w[0], -msg->w[1], -msg->w[2];
-  roll_[1] = msg->w[0]; pitch_[1] = -msg->w[1]; yaw_[1] = -msg->w[2];
+  roll_[1] = msg->w[0]; pitch_[1] = msg->w[1]; yaw_[1] = msg->w[2];
 
   // ZYX Tait–Bryan angles
-  roll_[0]  = std::atan2(2.0*(w*x + y*z), 1.0 - 2.0*(x*x + y*y));
-  pitch_[0] = std::asin (2.0*(w*y - z*x));
-  yaw_[0]   = std::atan2(2.0*(w*z + x*y), 1.0 - 2.0*(y*y + z*z));
+  roll_[0]  = std::atan2(2.0*(wx + yz), 1.0 - 2.0*(xx + yy));
+  pitch_[0] = std::asin (2.0*(wy - xz));
+  yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz));
 }
 
 void ControllerNode::mujocoCallback(const mujoco_interfaces::msg::MujocoState::SharedPtr msg) {
@@ -176,12 +158,16 @@ void ControllerNode::debugging_timer_callback() {
   controller_interfaces::msg::ControllerDebugVal gui_msg;
 
   for (int i = 0; i < 9; i++) {gui_msg.sbus_chnl[i] = sbus_chnl_[i];}
-  for (int i = 0; i < 4; i++){gui_msg.pos_cmd[i] = ref_[i];}
+
+  gui_msg.pos_cmd[0] = ref_[0]; // x
+  gui_msg.pos_cmd[1] = -ref_[1]; // y
+  gui_msg.pos_cmd[2] = -ref_[2]; // z
+  gui_msg.pos_cmd[3] = -ref_[3]; // yaw
 
   gui_msg.wrench_des[0] = f_out;
   gui_msg.wrench_des[1] = M_out[0];
-  gui_msg.wrench_des[2] = M_out[1];
-  gui_msg.wrench_des[3] = M_out[2];
+  gui_msg.wrench_des[2] = -M_out[1];
+  gui_msg.wrench_des[3] = -M_out[2];
   
   for (int i = 0; i < 3; i++) {
     gui_msg.imu_roll[i]  = roll_[i];

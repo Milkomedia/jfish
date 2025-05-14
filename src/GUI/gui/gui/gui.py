@@ -571,7 +571,7 @@ class DebugGUI(QWidget):
 
         self.plot_mea_data[0].append(self.controller_data['opti_x'][0])
         self.plot_mea_data[1].append(self.controller_data['opti_y'][0])
-        self.plot_mea_data[2].append(-self.controller_data['opti_z'][0])
+        self.plot_mea_data[2].append(self.controller_data['opti_z'][0])
         self.plot_mea_data[3].append(self.controller_data['imu_yaw'][0])
         
         for i in range(4):

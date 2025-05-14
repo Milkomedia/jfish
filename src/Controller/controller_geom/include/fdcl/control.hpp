@@ -65,7 +65,7 @@ private:
   Vector3 e3; /**< Direction of the third axis of the fixed frame */
 
   double m = 0.0;  /**< Mass of the rover (kg) */
-  double g =0.0;  /**< Gravitational acceleration (m/s^2) */
+  double g = 0.0;  /**< Gravitational acceleration (m/s^2) */
 
   // Attitude gains
   Matrix3 kR = Matrix3::Zero();  /**< Attitude gains */
