@@ -8,6 +8,10 @@ from launch_ros.actions import Node
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessStart, OnShutdown
 
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from ament_index_python.packages import get_package_share_directory
+
 def validate_mode(context, *args, **kwargs):
     # Retrieve the mode value from the launch configuration
     mode_val = LaunchConfiguration('mode').perform(context)
@@ -26,6 +30,18 @@ def generate_launch_description():
     )
 
     mode = LaunchConfiguration('mode')
+
+    # microstrain launch include
+    microstrain_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('microstrain_inertial_driver'),
+                'launch',
+                'microstrain_launch.py'
+            )
+        ),
+        launch_arguments={'mode': mode}.items()
+    )
 
     nodes = [
         # MuJoCo Node (Run only when mode==sim)
@@ -132,6 +148,7 @@ def generate_launch_description():
     return LaunchDescription([
         mode_arg,
         OpaqueFunction(function=validate_mode),
+        microstrain_launch,
         *nodes,
         on_start_info,
         shutdown_handler,

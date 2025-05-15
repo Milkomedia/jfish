@@ -5,6 +5,7 @@
 #include "imu_interfaces/msg/imu_measured.hpp"
 #include "mujoco_interfaces/msg/mu_jo_co_meas.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include <chrono>
 #include <deque>
 #include <functional>
