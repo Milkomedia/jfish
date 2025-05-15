@@ -12,11 +12,6 @@
   <exec_depend>watchdog_interfaces</exec_depend>
   <exec_depend>rclcpp</exec_depend>
 
-  <!-- <build_depend>nmea_msgs</build_depend>
-  <exec_depend>nmea_msgs</exec_depend>
-  <build_depend>microstrain_inertial_driver</build_depend>
-  <exec_depend>microstrain_inertial_driver</exec_depend> -->
-
   <export>
     <build_type>ament_cmake</build_type>
   </export>

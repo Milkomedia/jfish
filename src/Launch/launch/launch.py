@@ -31,7 +31,7 @@ def generate_launch_description():
 
     mode = LaunchConfiguration('mode')
 
-    # microstrain launch include
+    # microstrain launch
     microstrain_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -40,7 +40,8 @@ def generate_launch_description():
                 'microstrain_launch.py'
             )
         ),
-        launch_arguments={'mode': mode}.items()
+        launch_arguments={'mode': mode}.items(),
+        condition=IfCondition(PythonExpression(["'", mode, "' == 'real'"])),
     )
 
     nodes = [

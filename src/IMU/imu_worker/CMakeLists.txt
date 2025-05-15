@@ -14,10 +14,6 @@ find_package(sensor_msgs REQUIRED)
 find_package(mujoco_interfaces REQUIRED)
 find_package(watchdog_interfaces REQUIRED)
 
-# find_package(microstrain_inertial_driver REQUIRED)
-# find_package(microstrain_inertial_msgs REQUIRED)
-# find_package(nmea_msgs REQUIRED)
-
 # Include directories
 include_directories(include)
 
@@ -32,8 +28,6 @@ ament_target_dependencies(imu_worker
   sensor_msgs
   mujoco_interfaces
   watchdog_interfaces
-  # microstrain_inertial_driver
-  # microstrain_inertial_msgs
 )
 
 install(TARGETS
