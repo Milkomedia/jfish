@@ -13,12 +13,27 @@ return { a * e - b * f - c * g - d * h,    // Real part
          a * h + b * g - c * f + d * e };  // k component
 }
 
+constexpr inline std::array<double, 3> rotate_accel_to_world(const std::array<double, 4>& q, const std::array<double, 3>& a_local) noexcept {
+  double w = q[0], x = q[1], y = q[2], z = q[3];
+  double R[3][3] = {
+    {1 - 2*y*y - 2*z*z,     2*x*y - 2*z*w,     2*x*z + 2*y*w},
+    {    2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z,     2*y*z - 2*x*w},
+    {    2*x*z - 2*y*w,     2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y}
+  };
+  return {
+    R[0][0]*a_local[0] + R[0][1]*a_local[1] + R[0][2]*a_local[2],
+    R[1][0]*a_local[0] + R[1][1]*a_local[1] + R[1][2]*a_local[2],
+    R[2][0]*a_local[0] + R[2][1]*a_local[1] + R[2][2]*a_local[2]
+  };
+}
+
 IMUnode::IMUnode()
 : Node("imu_node"),
   gen_(std::random_device{}()),
   angle_dist_(0.0, noise_quat_std_dev),
   axis_dist_(0.0, 1.0),
-  noise_dist_(0.0, noise_gyro_std_dev)
+  noise_dist_(0.0, noise_gyro_std_dev),
+  accel_dist_(0.0, noise_accel_std_dev)
 {
   // 1) publishers
   imu_publisher_ = this->create_publisher<imu_interfaces::msg::ImuMeasured>("imu_mea", 1);
@@ -33,8 +48,8 @@ IMUnode::IMUnode()
   this->get_parameter("mode", mode);
 
   if (mode == "real"){
-    RCLCPP_WARN(this->get_logger(), "IMU Node : I cannot do anything :(");
-
+    microstrain_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>("imu/data", 1, std::bind(&IMUnode::microstrain_callback, this, std::placeholders::_1));
+    publish_timer_ = this->create_wall_timer(1ms, std::bind(&IMUnode::PublishMicroStrainMeasurement, this));
   }
   else if (mode == "sim"){
     // Subscription True Measuring value from MuJoCo
@@ -51,6 +66,36 @@ IMUnode::IMUnode()
   hb_enabled_ = true;
 }
 /* for real */
+void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
+  real_imu_data.q[0] = msg->orientation.w;
+  real_imu_data.q[1] = msg->orientation.x;
+  real_imu_data.q[2] = msg->orientation.y;
+  real_imu_data.q[3] = msg->orientation.z;
+
+  real_imu_data.w[0] = msg->angular_velocity.x;
+  real_imu_data.w[1] = msg->angular_velocity.y;
+  real_imu_data.w[2] = msg->angular_velocity.z;
+
+  std::array<double, 3> local_a = {
+    msg->linear_acceleration.x,
+    msg->linear_acceleration.y,
+    msg->linear_acceleration.z
+  };
+  auto global_a = rotate_accel_to_world(real_imu_data.q, local_a);
+  //auto global_a = local_a;
+
+  real_imu_data.a[0] = global_a[0];
+  real_imu_data.a[1] = global_a[1];
+  real_imu_data.a[2] = global_a[2];
+}
+
+void IMUnode::PublishMicroStrainMeasurement() {
+  auto output_msg = imu_interfaces::msg::ImuMeasured();
+  output_msg.q = { real_imu_data.q[0], real_imu_data.q[1], real_imu_data.q[2], real_imu_data.q[3] };
+  output_msg.w = { real_imu_data.w[0], real_imu_data.w[1], real_imu_data.w[2] };
+  output_msg.a = { real_imu_data.a[0], real_imu_data.a[1], real_imu_data.a[2] };
+  imu_publisher_->publish(output_msg);
+}
 
 /* for sim */
 void IMUnode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg) {
@@ -58,7 +103,7 @@ void IMUnode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPt
   rclcpp::Time now_time = this->now();
 
   // Push the new data into the buffer
-  DelayedData new_data;
+  Delayed_IMUdata new_data;
   new_data.stamp = now_time;
   new_data.q[0] = msg->q[0]; new_data.q[1] = msg->q[1]; new_data.q[2] = msg->q[2]; new_data.q[3] = msg->q[3];
   new_data.w[0] = msg->w[0]; new_data.w[1] = msg->w[1]; new_data.w[2] = msg->w[2];
@@ -81,7 +126,7 @@ void IMUnode::PublishMuJoCoMeasurement() {
   rclcpp::Time target_time = this->now() - delay_;
 
   // Search backwards (from newest to oldest) to find the first sample with stamp <= target_time
-  DelayedData delayed_data;
+  Delayed_IMUdata delayed_data;
   bool found = false;
 
   for (auto it = data_buffer_.rbegin(); it != data_buffer_.rend(); ++it) {

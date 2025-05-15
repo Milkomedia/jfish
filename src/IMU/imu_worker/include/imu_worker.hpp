@@ -15,12 +15,21 @@
 constexpr double two_PI = 2.0 * M_PI;
 constexpr double noise_quat_std_dev = 0.001;
 constexpr double noise_gyro_std_dev = 0.005;
+constexpr double noise_accel_std_dev = 0.01;
 
-struct DelayedData
+struct Delayed_IMUdata
 {
   rclcpp::Time stamp;
   std::array<double, 4> q;
   std::array<double, 3> w;
+  std::array<double, 3> a;
+};
+
+struct IMUdata
+{
+  std::array<double, 4> q;
+  std::array<double, 3> w;
+  std::array<double, 3> a;
 };
 
 class IMUnode : public rclcpp::Node {
@@ -29,8 +38,10 @@ public:
 
 private:
   void PublishMuJoCoMeasurement();
+  void PublishMicroStrainMeasurement();
   void heartbeat_timer_callback();
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
+  void microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
 
   // Publisher
   rclcpp::Publisher<imu_interfaces::msg::ImuMeasured>::SharedPtr imu_publisher_;
@@ -42,9 +53,10 @@ private:
 
   // Subscriber
   rclcpp::Subscription<mujoco_interfaces::msg::MuJoCoMeas>::SharedPtr mujoco_subscription_;
+  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr microstrain_subscription_;
 
   // Buffer (FIFO) to store data for delayed output
-  std::deque<DelayedData> data_buffer_;
+  std::deque<Delayed_IMUdata> data_buffer_;
 
   // Duration representing 3ms delay (3,000,000ns)
   rclcpp::Duration delay_{0, 3000000};
@@ -58,6 +70,10 @@ private:
   std::normal_distribution<double> angle_dist_;
   std::normal_distribution<double> axis_dist_;
   std::normal_distribution<double> noise_dist_;
+  std::normal_distribution<double> accel_dist_;
+
+  // Real imu (microstrain) Data
+  IMUdata real_imu_data;
 };
 
 #endif // IMU_WORKER_HPP
