@@ -11,21 +11,20 @@
 #include <functional>
 #include <random>
 #include <cmath>
+#include <thread>
 
 constexpr double noise_pos_std_dev = 0.001;
 constexpr double noise_vel_std_dev = 0.005;
 constexpr double noise_acc_std_dev = 0.01;
 
-struct Delayed_OPTIdata
-{
+struct Delayed_OPTIdata {
   rclcpp::Time stamp;
   std::array<double, 3> pos;
   std::array<double, 3> vel;
   std::array<double, 3> acc;
 };
 
-struct OPTIdata
-{
+struct OPTIdata {
   std::array<double, 3> pos;
 };
 
@@ -34,14 +33,18 @@ public:
   OptiTrackNode();
 
 private:
+  void PublishOptiTrackMeasurement();
   void PublishMuJoCoMeasurement();
   void heartbeat_timer_callback();
+  void optitrack_callback(const mocap_interfaces::msg::NamedPoseArray::SharedPtr msg);
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
 
-  void PublishOptiTrackMeasurement();
-  void optitrack_callback(const mocap_interfaces::msg::NamedPoseArray::SharedPtr msg);
+  bool opti_hz_check();
+
   // optitrack Subscriber
   rclcpp::Subscription<mocap_interfaces::msg::NamedPoseArray>::SharedPtr optitrack_mea_subscription_;
+  // MuJoCo Subscriber
+  rclcpp::Subscription<mujoco_interfaces::msg::MuJoCoMeas>::SharedPtr mujoco_subscription_;
 
   rclcpp::Publisher<mocap_interfaces::msg::MocapMeasured>::SharedPtr mocap_publisher_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
@@ -53,9 +56,6 @@ private:
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
   bool     hb_enabled_;   // gate flag
-
-  // MuJoCo Subscriber
-  rclcpp::Subscription<mujoco_interfaces::msg::MuJoCoMeas>::SharedPtr mujoco_subscription_;
   
   // Buffer (FIFO) to store data for delayed output
   std::deque<Delayed_OPTIdata> data_buffer_;
@@ -73,6 +73,11 @@ private:
 
   // optitrack data
   OPTIdata real_optitrack_data_;
+
+  // Buffer to store recent OptiTrack callback timestamps for freq estimation
+  std::deque<rclcpp::Time> opti_stamp_buffer_;
+  const rclcpp::Duration check_horizon_{0, 500000000};
+  rclcpp::Duration horizon_ = rclcpp::Duration::from_seconds(0.5);
 };
 
 #endif // MOCAP_WORKER_HPP

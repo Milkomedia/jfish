@@ -23,47 +23,81 @@ OptiTrackNode::OptiTrackNode()
 
   if (mode == "real"){
     // Mode = real -> Reading OptiTrack
-    optitrack_mea_subscription_ = this->create_subscription<mocap_interfaces::msg::NamedPoseArray>("poses", 1, std::bind(&OptiTrackNode::optitrack_callback, this, std::placeholders::_1));
-    publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(1), std::bind(&OptiTrackNode::PublishOptiTrackMeasurement, this));
+    optitrack_mea_subscription_ = this->create_subscription<mocap_interfaces::msg::NamedPoseArray>("/opti_pos", 1, std::bind(&OptiTrackNode::optitrack_callback, this, std::placeholders::_1));
+
+    while (rclcpp::ok() && !opti_hz_check()) {
+      rclcpp::spin_some(this->get_node_base_interface());
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+
+    publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(2), std::bind(&OptiTrackNode::PublishOptiTrackMeasurement, this));
+
+    // initial handshake: immediately send 42 and enable subsequent heartbeat
+    hb_state_   = 42;
+    hb_enabled_ = true;
   }
   else if (mode == "sim"){
     // Subscription True Measuring value from MuJoCo
-    mujoco_subscription_ = this->create_subscription<mujoco_interfaces::msg::MuJoCoMeas>("mujoco_meas", 1, std::bind(&OptiTrackNode::mujoco_callback, this, std::placeholders::_1));
-    publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(1), std::bind(&OptiTrackNode::PublishMuJoCoMeasurement, this));
+    mujoco_subscription_ = this->create_subscription<mujoco_interfaces::msg::MuJoCoMeas>("/mujoco_meas", 1, std::bind(&OptiTrackNode::mujoco_callback, this, std::placeholders::_1));
+    publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(2), std::bind(&OptiTrackNode::PublishMuJoCoMeasurement, this));
+
+    // initial handshake: immediately send 42 and enable subsequent heartbeat
+    hb_state_   = 42;
+    hb_enabled_ = true;
   }
   else{
     RCLCPP_ERROR(this->get_logger(), "Unknown mode: %s. No initialization performed.", mode.c_str());
     exit(1);
   }
-
-  // 4) initial handshake: immediately send 42 and enable subsequent heartbeat
-  hb_state_   = 42;
-  hb_enabled_ = true;
 }
 
 /* for real */
-void OptiTrackNode::optitrack_callback(const mocap_interfaces::msg::NamedPoseArray::SharedPtr msg) 
-{
+void OptiTrackNode::optitrack_callback(const mocap_interfaces::msg::NamedPoseArray::SharedPtr msg) {
+  // This callback must be called in 360hz
   rclcpp::Time now_time = this->now();
 
-  for (const auto& pose : msg->poses) 
-  {
-    if (pose.name == "strider") 
-    {
+  for (const auto& pose : msg->poses){
+    if (pose.name == "strider"){
       real_optitrack_data_.pos[0] = pose.pose.position.x;
       real_optitrack_data_.pos[1] = pose.pose.position.y;
       real_optitrack_data_.pos[2] = pose.pose.position.z;
       break;
     }
   }
+
+  // Store timestamp for later frequency estimation
+  opti_stamp_buffer_.push_back(now_time);
 }
 
-void OptiTrackNode::PublishOptiTrackMeasurement() {
+void OptiTrackNode::PublishOptiTrackMeasurement() { // Timer callbacked as 500Hz
   auto output_msg = mocap_interfaces::msg::MocapMeasured();
   output_msg.pos = { real_optitrack_data_.pos[0], real_optitrack_data_.pos[1], real_optitrack_data_.pos[2] };
-  // output_msg.vel = { real_optitrack_data_.vel[0], real_optitrack_data_.vel[1], real_optitrack_data_.vel[2] };
-  // output_msg.acc = { real_optitrack_data_.acc[0], real_optitrack_data_.acc[1], real_optitrack_data_.acc[2] };
   mocap_publisher_->publish(output_msg);
+
+  // opti disconnect monitoring
+  rclcpp::Time now = this->now();
+
+  while (!opti_stamp_buffer_.empty() && (now - opti_stamp_buffer_.front()) > horizon_) {
+    opti_stamp_buffer_.pop_front();
+  }
+
+  double freq_est = static_cast<double>(opti_stamp_buffer_.size()) / 0.5;
+
+  if (freq_est < 275.0 & hb_enabled_) {
+    RCLCPP_WARN(this->get_logger(), "OptiTrack callback freq dropped to %.1f Hz (<200 Hz). Disabling heartbeat.", freq_est);
+    hb_enabled_ = false;
+  }
+}
+
+bool OptiTrackNode::opti_hz_check() {
+  rclcpp::Time now = this->now();
+
+  while (!opti_stamp_buffer_.empty() && (now - opti_stamp_buffer_.front()) > check_horizon_) {
+    opti_stamp_buffer_.pop_front();
+  }
+  
+  double freq = static_cast<double>(opti_stamp_buffer_.size()) / check_horizon_.seconds();
+  return (freq >= 340.0);
 }
 
 /* for sim */

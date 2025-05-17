@@ -115,12 +115,12 @@ int main(int argc, char **argv)
   // prepare pose array publisher
   rclcpp::Publisher<mocap_interfaces::msg::NamedPoseArray>::SharedPtr pubPoses;
   if (poses_qos == "none") {
-    pubPoses = node->create_publisher<mocap_interfaces::msg::NamedPoseArray>("poses", 1);
+    pubPoses = node->create_publisher<mocap_interfaces::msg::NamedPoseArray>("/opti_pos", 1);
   } else if (poses_qos == "sensor") {
     rclcpp::SensorDataQoS sensor_data_qos;
     sensor_data_qos.keep_last(1);
     sensor_data_qos.deadline(rclcpp::Duration(0/*s*/, (int)1e9/poses_deadline /*ns*/));
-    pubPoses = node->create_publisher<mocap_interfaces::msg::NamedPoseArray>("poses", sensor_data_qos);
+    pubPoses = node->create_publisher<mocap_interfaces::msg::NamedPoseArray>("/opti_pos", sensor_data_qos);
   } else {
     throw std::runtime_error("Unknown QoS mode! " + poses_qos);
   }
