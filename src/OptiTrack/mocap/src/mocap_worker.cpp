@@ -23,7 +23,8 @@ OptiTrackNode::OptiTrackNode()
 
   if (mode == "real"){
     // Mode = real -> Reading OptiTrack
-    RCLCPP_WARN(this->get_logger(), "Opti Node : I cannot do anything :(");
+    optitrack_mea_subscription_ = this->create_subscription<mocap_interfaces::msg::NamedPoseArray>("poses", 1, std::bind(&OptiTrackNode::optitrack_callback, this, std::placeholders::_1));
+    publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(1), std::bind(&OptiTrackNode::PublishOptiTrackMeasurement, this));
   }
   else if (mode == "sim"){
     // Subscription True Measuring value from MuJoCo
@@ -41,6 +42,29 @@ OptiTrackNode::OptiTrackNode()
 }
 
 /* for real */
+void OptiTrackNode::optitrack_callback(const mocap_interfaces::msg::NamedPoseArray::SharedPtr msg) 
+{
+  rclcpp::Time now_time = this->now();
+
+  for (const auto& pose : msg->poses) 
+  {
+    if (pose.name == "strider") 
+    {
+      real_optitrack_data_.pos[0] = pose.pose.position.x;
+      real_optitrack_data_.pos[1] = pose.pose.position.y;
+      real_optitrack_data_.pos[2] = pose.pose.position.z;
+      break;
+    }
+  }
+}
+
+void OptiTrackNode::PublishOptiTrackMeasurement() {
+  auto output_msg = mocap_interfaces::msg::MocapMeasured();
+  output_msg.pos = { real_optitrack_data_.pos[0], real_optitrack_data_.pos[1], real_optitrack_data_.pos[2] };
+  // output_msg.vel = { real_optitrack_data_.vel[0], real_optitrack_data_.vel[1], real_optitrack_data_.vel[2] };
+  // output_msg.acc = { real_optitrack_data_.acc[0], real_optitrack_data_.acc[1], real_optitrack_data_.acc[2] };
+  mocap_publisher_->publish(output_msg);
+}
 
 /* for sim */
 void OptiTrackNode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg) {
@@ -49,7 +73,7 @@ void OptiTrackNode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::Sh
   rclcpp::Time now_time = this->now();
 
   // Push the new data into the buffer
-  DelayedData new_data;
+  Delayed_OPTIdata new_data;
   new_data.stamp = now_time;
   for (size_t i = 0; i < 3; ++i) {
     new_data.pos[i] = msg->pos[i];
@@ -74,7 +98,7 @@ void OptiTrackNode::PublishMuJoCoMeasurement() {
   rclcpp::Time target_time = this->now() - delay_;
 
   // Search backwards (from newest to oldest) to find the first sample with stamp <= target_time
-  DelayedData delayed_data;
+  Delayed_OPTIdata delayed_data;
   bool found = false;
 
   for (auto it = data_buffer_.rbegin(); it != data_buffer_.rend(); ++it) {

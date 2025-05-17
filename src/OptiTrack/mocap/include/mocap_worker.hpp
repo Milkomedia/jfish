@@ -5,6 +5,7 @@
 #include "mocap_interfaces/msg/mocap_measured.hpp"
 #include "mujoco_interfaces/msg/mu_jo_co_meas.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
+#include "mocap_interfaces/msg/named_pose_array.hpp"
 #include <chrono>
 #include <deque>
 #include <functional>
@@ -15,12 +16,17 @@ constexpr double noise_pos_std_dev = 0.001;
 constexpr double noise_vel_std_dev = 0.005;
 constexpr double noise_acc_std_dev = 0.01;
 
-struct DelayedData
+struct Delayed_OPTIdata
 {
   rclcpp::Time stamp;
   std::array<double, 3> pos;
   std::array<double, 3> vel;
   std::array<double, 3> acc;
+};
+
+struct OPTIdata
+{
+  std::array<double, 3> pos;
 };
 
 class OptiTrackNode : public rclcpp::Node {
@@ -31,6 +37,11 @@ private:
   void PublishMuJoCoMeasurement();
   void heartbeat_timer_callback();
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
+
+  void PublishOptiTrackMeasurement();
+  void optitrack_callback(const mocap_interfaces::msg::NamedPoseArray::SharedPtr msg);
+  // optitrack Subscriber
+  rclcpp::Subscription<mocap_interfaces::msg::NamedPoseArray>::SharedPtr optitrack_mea_subscription_;
 
   rclcpp::Publisher<mocap_interfaces::msg::MocapMeasured>::SharedPtr mocap_publisher_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
@@ -47,7 +58,7 @@ private:
   rclcpp::Subscription<mujoco_interfaces::msg::MuJoCoMeas>::SharedPtr mujoco_subscription_;
   
   // Buffer (FIFO) to store data for delayed output
-  std::deque<DelayedData> data_buffer_;
+  std::deque<Delayed_OPTIdata> data_buffer_;
 
   // Duration representing 3ms delay (3,000,000ns)
   rclcpp::Duration delay_{0, 3000000};
@@ -59,6 +70,9 @@ private:
   std::normal_distribution<double> pos_dist_;
   std::normal_distribution<double> vel_dist_;
   std::normal_distribution<double> acc_dist_;
+
+  // optitrack data
+  OPTIdata real_optitrack_data_;
 };
 
 #endif // MOCAP_WORKER_HPP

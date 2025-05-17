@@ -29,6 +29,12 @@ def generate_launch_description():
         description='Launch mode: sim or real'
     )
 
+    opti_node_config = os.path.join(
+        get_package_share_directory('mocap'),
+        'config',
+        'cfg.yaml'
+    )
+
     mode = LaunchConfiguration('mode')
 
     # microstrain launch
@@ -58,6 +64,14 @@ def generate_launch_description():
             package='watchdog_manager',
             executable='watchdog_worker',
             name='watchdog_node',
+        ),
+
+        Node(
+            package='mocap',
+            executable='motion_capture_tracking_node',
+            name='motion_capture_tracking',
+            condition=IfCondition(PythonExpression(["'", mode, "' == 'real'"])),
+            parameters=[opti_node_config],
         ),
 
         # Optitrack Node

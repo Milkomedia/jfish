@@ -5,11 +5,30 @@
   <maintainer email="milkomeda@seoultech.ac.kr">kyprus</maintainer>
   <license>None</license>
 
+  <!-- Build tool -->
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <exec_depend>mocap_interfaces</exec_depend>
-  <exec_depend>mujoco_interfaces</exec_depend>
-  <exec_depend>watchdog_interfaces</exec_depend>
-  <exec_depend>rclcpp</exec_depend>
+
+  <!-- Core dependencies -->
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>tf2_ros</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <!-- Interface packages -->
+  <depend>mocap_interfaces</depend>
+  <depend>mujoco_interfaces</depend>
+  <depend>watchdog_interfaces</depend>
+
+  <!-- External C++ libs -->
+  <depend>eigen3_cmake_module</depend>
+  <depend>eigen</depend>
+  <depend>libpcl-all-dev</depend>
+
+  <!-- Test tools -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
