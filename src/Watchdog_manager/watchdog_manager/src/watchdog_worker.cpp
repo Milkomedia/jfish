@@ -23,21 +23,43 @@ WatchDogNode::WatchDogNode(): Node("watchdog_node"),
     last_time_[name]    = start_time_;
   }
 
-
   // subscribers
-  optitrack_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("optitrack_state", 1, std::bind(&WatchDogNode::optitrackCallback, this, std::placeholders::_1));
-  imu_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("imu_state", 1, std::bind(&WatchDogNode::imuCallback, this, std::placeholders::_1));
-  sbus_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("sbus_state", 1, std::bind(&WatchDogNode::sbusCallback, this, std::placeholders::_1));
-  arm_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("armchanger_state", 1, std::bind(&WatchDogNode::armCallback, this, std::placeholders::_1));
-  controller_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("controller_state", 1, std::bind(&WatchDogNode::controllerCallback, this, std::placeholders::_1));
-  allocator_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("allocator_state", 1, std::bind(&WatchDogNode::allocatorCallback, this, std::placeholders::_1));
-  dynamixel_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("dynamixel_state", 1, std::bind(&WatchDogNode::dynamixelCallback, this, std::placeholders::_1));
+  optitrack_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("/optitrack_state", 1, std::bind(&WatchDogNode::optitrackCallback, this, std::placeholders::_1));
+  imu_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("/imu_state", 1, std::bind(&WatchDogNode::imuCallback, this, std::placeholders::_1));
+  sbus_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("/sbus_state", 1, std::bind(&WatchDogNode::sbusCallback, this, std::placeholders::_1));
+  arm_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("/armchanger_state", 1, std::bind(&WatchDogNode::armCallback, this, std::placeholders::_1));
+  controller_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("/controller_state", 1, std::bind(&WatchDogNode::controllerCallback, this, std::placeholders::_1));
+  allocator_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("/allocator_state", 1, std::bind(&WatchDogNode::allocatorCallback, this, std::placeholders::_1));
+  dynamixel_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("/dynamixel_state", 1, std::bind(&WatchDogNode::dynamixelCallback, this, std::placeholders::_1));
 
   // publisher
-  watchdog_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("watchdog_state", 1);
+  watchdog_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/watchdog_state", 1);
 
-  // timer at 10 Hz to enforce handshake & heartbeat timeouts
-  timer_ = create_wall_timer(std::chrono::milliseconds(100), std::bind(&WatchDogNode::publishKill, this));
+  // timer at 20 Hz to enforce handshake & heartbeat timeouts
+  pub_timer_ = create_wall_timer(std::chrono::milliseconds(5), std::bind(&WatchDogNode::publishKill, this));
+
+  // timer at 50 Hz to check abnormality
+  thinking_timer_ = create_wall_timer(std::chrono::milliseconds(2), std::bind(&WatchDogNode::watchdog_Thinking, this));
+}
+
+void WatchDogNode::watchdog_Thinking() {
+  if (!handshake_checked_ || failure_detected_){return;}
+  
+  rclcpp::Time now = this->now();
+
+  // iterate over all nodes and check heartbeat timeout
+  for (const auto & entry : last_time_) {
+    const std::string & node_name = entry.first;
+    const rclcpp::Time & last_time = entry.second;
+
+    double dt = (now - last_time).seconds();
+    if (dt > HEARTBEAT_TIMEOUT_SEC) {
+      RCLCPP_WARN(this->get_logger(), "[%s]: heartbeat timeout (dt=%.3f > %.3f)", node_name.c_str(), dt, HEARTBEAT_TIMEOUT_SEC);
+      failure_detected_ = true;
+      
+      break;
+    }
+  }
 }
 
 void WatchDogNode::commonCallback(const std::string & node_name, const watchdog_interfaces::msg::NodeState::SharedPtr msg) {
@@ -45,7 +67,7 @@ void WatchDogNode::commonCallback(const std::string & node_name, const watchdog_
 
   auto now = this->now();
 
-  // --- 1) initial handshake: expect exactly state==42 ---
+  // initial handshake: expect exactly state==42 ---
   if (!is_node_initiated_[node_name]) {
     if (msg->state == 42) {
       is_node_initiated_[node_name] = true;
@@ -60,16 +82,10 @@ void WatchDogNode::commonCallback(const std::string & node_name, const watchdog_
     return;
   }
 
-  // --- 2) after handshake: check sequence increment & inter-message timeout ---
+  // after handshake: check sequence increment & inter-message timeout ---
   uint8_t expected = static_cast<uint8_t>(last_state_[node_name] + 1);
   if (msg->state != expected) {
     RCLCPP_WARN(this->get_logger(), "[%s]: heartbeat sequence error(expected %u but got %u).", node_name.c_str(), expected, msg->state);
-    failure_detected_ = true;
-  }
-
-  double dt = (now - last_time_[node_name]).seconds();
-  if (dt > HEARTBEAT_TIMEOUT_SEC) {
-    RCLCPP_WARN(this->get_logger(), "[%s]: heartbeat timeout(dt=%.3f > %.3f)", node_name.c_str(), dt, HEARTBEAT_TIMEOUT_SEC);
     failure_detected_ = true;
   }
 

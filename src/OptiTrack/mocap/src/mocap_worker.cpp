@@ -83,8 +83,8 @@ void OptiTrackNode::PublishOptiTrackMeasurement() { // Timer callbacked as 500Hz
 
   double freq_est = static_cast<double>(opti_stamp_buffer_.size()) / 0.5;
 
-  if (freq_est < 275.0 & hb_enabled_) {
-    RCLCPP_WARN(this->get_logger(), "OptiTrack callback freq dropped to %.1f Hz (<200 Hz). Disabling heartbeat.", freq_est);
+  if (freq_est < 275.0 && hb_enabled_) {
+    RCLCPP_WARN(this->get_logger(), "OptiTrack callback freq dropped to %.1f Hz (<275 Hz). Disabling heartbeat.", freq_est);
     hb_enabled_ = false;
   }
 }

@@ -29,6 +29,8 @@ private:
   // timer callback: evaluate handshake timeout & runtime heartbeats
   void publishKill();
 
+  void watchdog_Thinking();
+
   // subscriptions & publisher
   rclcpp::Subscription<watchdog_interfaces::msg::NodeState>::SharedPtr sbus_subscription_;
   rclcpp::Subscription<watchdog_interfaces::msg::NodeState>::SharedPtr controller_subscription_;
@@ -38,7 +40,8 @@ private:
   rclcpp::Subscription<watchdog_interfaces::msg::NodeState>::SharedPtr optitrack_subscription_;
   rclcpp::Subscription<watchdog_interfaces::msg::NodeState>::SharedPtr arm_subscription_;
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr watchdog_publisher_;
-  rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr pub_timer_;
+  rclcpp::TimerBase::SharedPtr thinking_timer_;
 
   // per-node state tracking
   std::unordered_map<std::string, bool>     is_node_initiated_;   // received 42?
