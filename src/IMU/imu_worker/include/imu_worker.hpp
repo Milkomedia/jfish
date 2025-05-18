@@ -11,6 +11,7 @@
 #include <functional>
 #include <random>
 #include <cmath>
+#include <rclcpp/executors/single_threaded_executor.hpp>
 
 constexpr double two_PI = 2.0 * M_PI;
 constexpr double noise_quat_std_dev = 0.001;
@@ -43,6 +44,8 @@ private:
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
   void microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
 
+  bool imu_hz_check();
+
   // Publisher
   rclcpp::Publisher<imu_interfaces::msg::ImuMeasured>::SharedPtr imu_publisher_;
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
@@ -74,6 +77,10 @@ private:
 
   // Real imu (microstrain) Data
   IMUdata real_imu_data;
+
+  // Buffer to store recent IMU callback timestamps for freq estimation
+  std::deque<rclcpp::Time> imu_stamp_buffer_;
+  const rclcpp::Duration check_horizon_{0, 300000000}; // (0.3s)
 };
 
 #endif // IMU_WORKER_HPP

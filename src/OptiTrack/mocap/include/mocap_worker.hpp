@@ -76,8 +76,7 @@ private:
 
   // Buffer to store recent OptiTrack callback timestamps for freq estimation
   std::deque<rclcpp::Time> opti_stamp_buffer_;
-  const rclcpp::Duration check_horizon_{0, 500000000};
-  rclcpp::Duration horizon_ = rclcpp::Duration::from_seconds(0.5);
+  const rclcpp::Duration check_horizon_{0, 500000000}; // (0.5s)
 };
 
 #endif // MOCAP_WORKER_HPP

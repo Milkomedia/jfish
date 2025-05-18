@@ -77,7 +77,7 @@ void OptiTrackNode::PublishOptiTrackMeasurement() { // Timer callbacked as 500Hz
   // opti disconnect monitoring
   rclcpp::Time now = this->now();
 
-  while (!opti_stamp_buffer_.empty() && (now - opti_stamp_buffer_.front()) > horizon_) {
+  while (!opti_stamp_buffer_.empty() && (now - opti_stamp_buffer_.front()) > check_horizon_) {
     opti_stamp_buffer_.pop_front();
   }
 

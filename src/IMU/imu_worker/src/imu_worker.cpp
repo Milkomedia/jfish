@@ -1,7 +1,5 @@
 #include "imu_worker.hpp"
 
-using namespace std::chrono_literals;
-
 constexpr inline std::array<double, 4> quaternion_multiply(const std::array<double, 4>& q1, const std::array<double, 4>& q2) noexcept {
   // Cache components to minimize repeated array accesses
   const double a = q1[0], b = q1[1], c = q1[2], d = q1[3];
@@ -37,7 +35,7 @@ IMUnode::IMUnode()
 {
   // 1) publishers
   imu_publisher_ = this->create_publisher<imu_interfaces::msg::ImuMeasured>("imu_mea", 1);
-  heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("imu_state", 1);
+  heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/imu_state", 1);
 
   // 2) always create heartbeat timer (100ms), but _publish only when enabled
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&IMUnode::heartbeat_timer_callback, this));
@@ -48,25 +46,43 @@ IMUnode::IMUnode()
   this->get_parameter("mode", mode);
 
   if (mode == "real"){
-    microstrain_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>("imu/data", 1, std::bind(&IMUnode::microstrain_callback, this, std::placeholders::_1));
-    publish_timer_ = this->create_wall_timer(1ms, std::bind(&IMUnode::PublishMicroStrainMeasurement, this));
+    auto sensor_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile();
+    microstrain_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>("imu/data", sensor_qos, std::bind(&IMUnode::microstrain_callback, this, std::placeholders::_1));
+
+    rclcpp::executors::SingleThreadedExecutor exec;
+    exec.add_node(this->get_node_base_interface());
+
+    while (rclcpp::ok() && !imu_hz_check()) {
+      exec.spin_once(std::chrono::milliseconds(1));
+    }
+
+    publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(1), std::bind(&IMUnode::PublishMicroStrainMeasurement, this));
+
+    // initial handshake: immediately send 42 and enable subsequent heartbeat
+    hb_state_   = 42;
+    hb_enabled_ = true;
   }
   else if (mode == "sim"){
     // Subscription True Measuring value from MuJoCo
-    mujoco_subscription_ = this->create_subscription<mujoco_interfaces::msg::MuJoCoMeas>("mujoco_meas", 1, std::bind(&IMUnode::mujoco_callback, this, std::placeholders::_1));
+    mujoco_subscription_ = this->create_subscription<mujoco_interfaces::msg::MuJoCoMeas>("/mujoco_meas", 1, std::bind(&IMUnode::mujoco_callback, this, std::placeholders::_1));
     publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(1), std::bind(&IMUnode::PublishMuJoCoMeasurement, this));
+    
+    // initial handshake: immediately send 42 and enable subsequent heartbeat
+    hb_state_   = 42;
+    hb_enabled_ = true;
   }
   else{
     RCLCPP_ERROR(this->get_logger(), "Unknown mode: %s. No initialization performed.", mode.c_str());
     exit(1);
   }
 
-  // 4) initial handshake: immediately send 42 and enable subsequent heartbeat
-  hb_state_   = 42;
-  hb_enabled_ = true;
 }
+
 /* for real */
 void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
+  // This callback must be called in 900hz
+  rclcpp::Time now_time = this->now();
+  
   real_imu_data.q[0] = msg->orientation.w;
   real_imu_data.q[1] = msg->orientation.x;
   real_imu_data.q[2] = msg->orientation.y;
@@ -87,14 +103,42 @@ void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
   real_imu_data.a[0] = global_a[0];
   real_imu_data.a[1] = global_a[1];
   real_imu_data.a[2] = global_a[2];
+
+  // Store timestamp for later frequency estimation
+  imu_stamp_buffer_.push_back(now_time);
 }
 
-void IMUnode::PublishMicroStrainMeasurement() {
+void IMUnode::PublishMicroStrainMeasurement() { // Timer callbacked as 1kHz
   auto output_msg = imu_interfaces::msg::ImuMeasured();
   output_msg.q = { real_imu_data.q[0], real_imu_data.q[1], real_imu_data.q[2], real_imu_data.q[3] };
   output_msg.w = { real_imu_data.w[0], real_imu_data.w[1], real_imu_data.w[2] };
   output_msg.a = { real_imu_data.a[0], real_imu_data.a[1], real_imu_data.a[2] };
   imu_publisher_->publish(output_msg);
+
+  // imu disconnect(or hz dropping) monitoring
+  rclcpp::Time now = this->now();
+
+  while (!imu_stamp_buffer_.empty() && (now - imu_stamp_buffer_.front()) > check_horizon_) {
+    imu_stamp_buffer_.pop_front();
+  }
+
+  double freq_est = static_cast<double>(imu_stamp_buffer_.size()) / 0.3;
+
+  if (freq_est < 830.0 && hb_enabled_) {
+    RCLCPP_WARN(this->get_logger(), "IMU callback freq dropped to %.1f Hz (<830 Hz). Disabling heartbeat.", freq_est);
+    hb_enabled_ = false;
+  }
+}
+
+bool IMUnode::imu_hz_check() {
+  rclcpp::Time now = this->now();
+
+  while (!imu_stamp_buffer_.empty() && (now - imu_stamp_buffer_.front()) > check_horizon_) {
+    imu_stamp_buffer_.pop_front();
+  }
+  
+  double freq = static_cast<double>(imu_stamp_buffer_.size()) / check_horizon_.seconds();
+  return (freq >= 800.0);
 }
 
 /* for sim */
