@@ -17,6 +17,12 @@ constexpr double noise_pos_std_dev = 0.001;
 constexpr double noise_vel_std_dev = 0.005;
 constexpr double noise_acc_std_dev = 0.01;
 
+constexpr double vel_lpf_alpha_ = 0.1;
+constexpr double acc_lpf_alpha_ = 0.05;
+
+constexpr double vel_lpf_beta_ = 1.0 - vel_lpf_alpha_;
+constexpr double acc_lpf_beta_ = 1.0 - acc_lpf_alpha_;
+
 struct Delayed_OPTIdata {
   rclcpp::Time stamp;
   std::array<double, 3> pos;
@@ -26,6 +32,8 @@ struct Delayed_OPTIdata {
 
 struct OPTIdata {
   std::array<double, 3> pos;
+  std::array<double, 3> vel;
+  std::array<double, 3> acc;
 };
 
 class OptiTrackNode : public rclcpp::Node {
@@ -70,6 +78,16 @@ private:
   std::normal_distribution<double> pos_dist_;
   std::normal_distribution<double> vel_dist_;
   std::normal_distribution<double> acc_dist_;
+
+  std::array<double, 3> vel_raw;
+  std::array<double, 3> acc_raw;
+  std::array<double, 3> last_pos_{0.0, 0.0, 0.0};
+  std::array<double, 3> last_vel_{0.0, 0.0, 0.0};
+  std::array<double, 3> vel_filtered_{0.0, 0.0, 0.0};
+  std::array<double, 3> acc_filtered_{0.0, 0.0, 0.0};
+  rclcpp::Time          last_time_{0, 0, RCL_ROS_TIME};
+
+  double last_dt_{0.0};
 
   // optitrack data
   OPTIdata real_optitrack_data_;

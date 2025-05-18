@@ -54,7 +54,7 @@ private:
   bool      failure_detected_;    // once true, we always publish kill
 
   // timeouts (in seconds)
-  static constexpr double HANDSHAKE_TIMEOUT_SEC = 1.0;
+  static constexpr double HANDSHAKE_TIMEOUT_SEC = 4.0;
   static constexpr double HEARTBEAT_TIMEOUT_SEC = 0.2;
 };
 

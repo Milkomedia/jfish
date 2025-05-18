@@ -47,6 +47,7 @@ IMUnode::IMUnode()
 
   if (mode == "real"){
     auto sensor_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile();
+    // auto sensor_qos = rclcpp::SensorDataQoS{};
     microstrain_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>("imu/data", sensor_qos, std::bind(&IMUnode::microstrain_callback, this, std::placeholders::_1));
 
     rclcpp::executors::SingleThreadedExecutor exec;
@@ -55,6 +56,8 @@ IMUnode::IMUnode()
     while (rclcpp::ok() && !imu_hz_check()) {
       exec.spin_once(std::chrono::milliseconds(1));
     }
+
+    // RCLCPP_INFO(this->get_logger(), " IMU STARTED");
 
     publish_timer_ = this->create_wall_timer(std::chrono::milliseconds(1), std::bind(&IMUnode::PublishMicroStrainMeasurement, this));
 
@@ -122,12 +125,13 @@ void IMUnode::PublishMicroStrainMeasurement() { // Timer callbacked as 1kHz
     imu_stamp_buffer_.pop_front();
   }
 
-  double freq_est = static_cast<double>(imu_stamp_buffer_.size()) / 0.3;
+  double freq_est = static_cast<double>(imu_stamp_buffer_.size()) / check_horizon_.seconds();
 
   if (freq_est < 830.0 && hb_enabled_) {
     RCLCPP_WARN(this->get_logger(), "IMU callback freq dropped to %.1f Hz (<830 Hz). Disabling heartbeat.", freq_est);
     hb_enabled_ = false;
   }
+  else{RCLCPP_WARN(this->get_logger(), "%.5f", real_imu_data.q[2]);}
 }
 
 bool IMUnode::imu_hz_check() {

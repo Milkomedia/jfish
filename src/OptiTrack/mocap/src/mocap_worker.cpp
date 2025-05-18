@@ -65,13 +65,34 @@ void OptiTrackNode::optitrack_callback(const mocap_interfaces::msg::NamedPoseArr
     }
   }
 
-  // Store timestamp for later frequency estimation
+  double dt = 0.0;
+  if (last_time_.nanoseconds() != 0) {dt = (now_time - last_time_).seconds();}
+  last_time_ = now_time;
+  last_dt_   = dt; 
+
+  if (dt > 0.0) {
+    for (int i = 0; i < 3; ++i) {
+      vel_raw[i] = real_optitrack_data_.vel[i] = (real_optitrack_data_.pos[i] - last_pos_[i]) / dt;
+      vel_filtered_[i] = vel_lpf_alpha_ * vel_raw[i] + vel_lpf_beta_ * vel_filtered_[i];
+      real_optitrack_data_.vel[i] = vel_filtered_[i];
+
+      acc_raw[i] = real_optitrack_data_.acc[i] = (vel_filtered_[i] - last_vel_[i]) / dt;
+      acc_filtered_[i] = acc_lpf_alpha_ * acc_raw[i] + acc_lpf_beta_ * acc_filtered_[i];
+      real_optitrack_data_.acc[i] = acc_filtered_[i];
+    }
+  }
+  
+  last_pos_  = real_optitrack_data_.pos;
+  last_vel_  = vel_filtered_;
+
   opti_stamp_buffer_.push_back(now_time);
 }
 
 void OptiTrackNode::PublishOptiTrackMeasurement() { // Timer callbacked as 500Hz
   auto output_msg = mocap_interfaces::msg::MocapMeasured();
   output_msg.pos = { real_optitrack_data_.pos[0], real_optitrack_data_.pos[1], real_optitrack_data_.pos[2] };
+  output_msg.vel = { real_optitrack_data_.vel[0], real_optitrack_data_.vel[1], real_optitrack_data_.vel[2] };
+  output_msg.acc = { real_optitrack_data_.acc[0], real_optitrack_data_.acc[1], real_optitrack_data_.acc[2] };
   mocap_publisher_->publish(output_msg);
 
   // opti disconnect monitoring

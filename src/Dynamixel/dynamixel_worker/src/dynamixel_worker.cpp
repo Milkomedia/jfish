@@ -15,7 +15,7 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
   joint_val_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("joint_cmd", 1, std::bind(&DynamixelNode::armchanger_callback, this, std::placeholders::_1));
 
   // Create ROS2 publishers for heartbeat and motor positions
-  heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("dynamixel_state", 1);
+  heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/dynamixel_state", 1);
   pos_mea_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("joint_mea", 1);
 
   // Create timer for heartbeat
@@ -179,7 +179,6 @@ void DynamixelNode::align_dynamixel() {
     RCLCPP_INFO(get_logger(), "Dynamixel initial alignment done.");
   }
 }
-
 
 /* for real */
 void DynamixelNode::Dynamixel_Write_Read() {
@@ -349,7 +348,6 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
     }
   }
 }
-
 
 void DynamixelNode::heartbeat_timer_callback() {
   // gate until handshake done

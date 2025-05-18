@@ -116,11 +116,10 @@ void WatchDogNode::optitrackCallback(const watchdog_interfaces::msg::NodeState::
 void WatchDogNode::armCallback(const watchdog_interfaces::msg::NodeState::SharedPtr msg)
 { commonCallback("arm_changing_node", msg); }
 
-void WatchDogNode::publishKill()
-{
+void WatchDogNode::publishKill() {
   auto now = this->now();
 
-  // --- handshake timeout enforcement (1 s) ---
+  // --- handshake timeout enforcement (1 s) --- 핸드셰이크 활성화하는놈
   if (!handshake_checked_ && !failure_detected_) {
     if ((now - start_time_).seconds() > HANDSHAKE_TIMEOUT_SEC) {
       // if any node never sent 42, immediately flag failure
@@ -128,7 +127,6 @@ void WatchDogNode::publishKill()
         if (!it.second) {
           RCLCPP_ERROR(this->get_logger(), "[%s]: not started.", it.first.c_str());
           failure_detected_ = true;
-          break;
         }
       }
 
