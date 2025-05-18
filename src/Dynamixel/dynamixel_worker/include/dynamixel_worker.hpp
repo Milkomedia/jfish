@@ -23,14 +23,14 @@
 #define ADDR_POSITION_P_GAIN     84
 #define ADDR_POSITION_I_GAIN     82
 #define ADDR_POSITION_D_GAIN     80
-#define ADDR_VELOCITY_P_GAIN      78
-#define ADDR_VELOCITY_I_GAIN      76
+#define ADDR_VELOCITY_P_GAIN     78
+#define ADDR_VELOCITY_I_GAIN     76
 
 #define PROTOCOL_VERSION 2.0
 #define BAUDRATE         4000000
 #define DEVICE_NAME      "/dev/ttyUSB1"
 
-#define ARM_NUM 1
+#define ARM_NUM 4
 
 constexpr std::array<std::array<uint8_t, 5>, 4> DXL_IDS = {{
   {1, 2, 3, 4, 5},   // Arm 1
@@ -44,6 +44,7 @@ constexpr double rad2ppr_J1 = 6.25 * 2048.0 / PI;
 constexpr double ppr2rad_J1 = PI / 2048.0 / 6.25;
 constexpr double rad2ppr = 2048.0 / PI;
 constexpr double ppr2rad = PI / 2048.0;
+
 
 class DynamixelNode : public rclcpp::Node {
 public:
@@ -60,6 +61,7 @@ private:
   void change_position_gain(uint8_t dxl_id, uint16_t p_gain, uint16_t i_gain, uint16_t d_gain);
   void change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16_t i_gain);
   void heartbeat_timer_callback();
+  void align_dynamixel();
 
   // ROS2 communication
   rclcpp::Subscription<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_val_subscriber_;
@@ -76,6 +78,21 @@ private:
   dynamixel::GroupSyncWrite* groupSyncWrite_;
   dynamixel::GroupSyncRead*  groupSyncRead_;
 
+  std::chrono::steady_clock::time_point last_pub_time_;
+
+  const size_t init_count_max_{500};
+  size_t init_count_{0};
+  bool init_read_{false}; 
+
+  double arm_init_rad_[4][5] = {
+    {0., -0.78540, 1.57078, 0.78540, 0.},
+    {0., -0.78540, 1.57078, 0.78540, 0.},
+    {0., -0.78540, 1.57078, 0.78540, 0.},
+    {0., -0.78540, 1.57078, 0.78540, 0.}
+  };
+
+  int32_t init_read_ppr_[4][5] = {};
+
   // arm changer sub
   double arm_des_rad[4][5] = { // [rad]
     {0, 0, 0, 0, 0},
@@ -84,7 +101,7 @@ private:
     {0, 0, 0, 0, 0}
   };
 
-  int arm_des_ppr[4][5] = { // [ppr]
+  double arm_des_ppr[4][5] = { // [ppr]
     {0, 0, 0, 0, 0},
     {0, 0, 0, 0, 0},
     {0, 0, 0, 0, 0},
@@ -93,10 +110,17 @@ private:
 
   // mujoco or dynamixel read
   double arm_mea[4][5] = { // [rad]
-    {0., -0.84522, 1.50944, 0.90812, 0.},
-    {0., -0.84522, 1.50944, 0.90812, 0.},
-    {0., -0.84522, 1.50944, 0.90812, 0.},
-    {0., -0.84522, 1.50944, 0.90812, 0.}
+    {0., -0.78540, 1.57078, 0.78540, 0.},
+    {0., -0.78540, 1.57078, 0.78540, 0.},
+    {0., -0.78540, 1.57078, 0.78540, 0.},
+    {0., -0.78540, 1.57078, 0.78540, 0.}
+  };
+
+  double filtered_des_ppr[4][5] = { // [rad]
+    {0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0}
   };
 
   uint16_t dnmxl_err_cnt_ = 0;

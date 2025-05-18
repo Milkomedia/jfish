@@ -8,14 +8,15 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
     portHandler_(nullptr),
     packetHandler_(nullptr),
     groupSyncWrite_(nullptr),
-    groupSyncRead_(nullptr)
+    groupSyncRead_(nullptr),
+    last_pub_time_(std::chrono::steady_clock::now()) 
 {
   // Create ROS2 subscriber for joint values
-  joint_val_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("/joint_cmd", 1, std::bind(&DynamixelNode::armchanger_callback, this, std::placeholders::_1));
+  joint_val_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("joint_cmd", 1, std::bind(&DynamixelNode::armchanger_callback, this, std::placeholders::_1));
 
   // Create ROS2 publishers for heartbeat and motor positions
-  heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/dynamixel_state", 1);
-  pos_mea_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("/joint_mea", 1);
+  heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("dynamixel_state", 1);
+  pos_mea_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("joint_mea", 1);
 
   // Create timer for heartbeat
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&DynamixelNode::heartbeat_timer_callback, this));
@@ -109,19 +110,102 @@ void DynamixelNode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::Sh
   }
 }
 
+void DynamixelNode::align_dynamixel() {
+  if (init_count_ == 0) {
+    groupSyncRead_->clearParam();
+    for (size_t i = 0; i < ARM_NUM; ++i) {
+      for (size_t j = 0; j < 5; ++j) {
+        groupSyncRead_->addParam(static_cast<uint8_t>(DXL_IDS[i][j]));
+      }
+    }
+
+    if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {
+      RCLCPP_ERROR(get_logger(), "Initial read failed");
+      return;
+    }
+
+    for (size_t i = 0; i < ARM_NUM; ++i) {
+      for (size_t j = 0; j < 5; ++j) {
+        uint8_t id = DXL_IDS[i][j];
+        if (groupSyncRead_->isAvailable(id, ADDR_PRESENT_POSITION, 4)) {
+          int32_t ppr = groupSyncRead_->getData(id, ADDR_PRESENT_POSITION, 4);
+          init_read_ppr_[i][j] = ppr;
+        } else {
+          RCLCPP_WARN(get_logger(), "Motor ID %d not available for initial read", id);
+        }
+      }
+    }
+
+    for (size_t i = 0; i < ARM_NUM; ++i) {
+      for (size_t j = 0; j < 5; ++j) {
+        double rad = arm_init_rad_[i][j];
+        if (j == 0) {
+          arm_des_ppr[i][j] = static_cast<int32_t>(rad * rad2ppr_J1 + 2048.0);
+        } else if (j == 3) {
+          arm_des_ppr[i][j] = static_cast<int32_t>(rad * rad2ppr + 2048.0);
+        } else {
+          arm_des_ppr[i][j] = static_cast<int32_t>(-rad * rad2ppr + 2048.0);
+        }
+      }
+    }
+  }
+
+  double alpha = static_cast<double>(init_count_) / init_count_max_;
+  if (alpha > 1.0) alpha = 1.0;
+
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < 5; ++j) {
+      filtered_des_ppr[i][j] =
+        static_cast<int32_t>(init_read_ppr_[i][j] * (1.0 - alpha) + arm_des_ppr[i][j] * alpha);
+    }
+  }
+
+  groupSyncWrite_->clearParam();
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < 5; ++j) {
+      uint8_t param_goal[4] = {
+        DXL_LOBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
+        DXL_LOBYTE(DXL_HIWORD(filtered_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_HIWORD(filtered_des_ppr[i][j]))
+      };
+      groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal);
+    }
+  }
+  groupSyncWrite_->txPacket();
+
+  if (++init_count_ >= init_count_max_) {
+    init_read_ = true;
+    RCLCPP_INFO(get_logger(), "Dynamixel initial alignment done.");
+  }
+}
+
+
 /* for real */
 void DynamixelNode::Dynamixel_Write_Read() {
+
+  if (!init_read_) {
+    align_dynamixel();
+    return;
+  }
+  
   /*  Write  */
   groupSyncWrite_->clearParam();
   
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < 5; ++j) {
+      // Apply LPF in PPR domain
+      filtered_des_ppr[i][j] = static_cast<int>(
+        0.2 * arm_des_ppr[i][j] + 0.8 * filtered_des_ppr[i][j]
+      );
+  
       uint8_t param_goal_position[4] = {
-        DXL_LOBYTE(DXL_LOWORD(arm_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_LOWORD(arm_des_ppr[i][j])),
-        DXL_LOBYTE(DXL_HIWORD(arm_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_HIWORD(arm_des_ppr[i][j]))
+        DXL_LOBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
+        DXL_LOBYTE(DXL_HIWORD(filtered_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_HIWORD(filtered_des_ppr[i][j]))
       };
+  
       if (!groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position)) {
         dnmxl_err_cnt_++;
       }
@@ -169,6 +253,7 @@ void DynamixelNode::Dynamixel_Write_Read() {
     msg.a3_mea[j] = arm_mea[2][j];
     msg.a4_mea[j] = arm_mea[3][j];
   }
+
   pos_mea_publisher_->publish(msg);
 }
 
@@ -177,23 +262,44 @@ bool DynamixelNode::init_Dynamixel() {
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < 5; ++j) {
-        uint8_t id = DXL_IDS[i][j];
-        if (packetHandler_->write1ByteTxRx(portHandler_, id, ADDR_OPERATING_MODE, 3, &dxl_error) != COMM_SUCCESS){
+      uint8_t id = DXL_IDS[i][j];
+
+      // Set operating mode
+      uint8_t mode = (j == 0) ? 4 : 3;  // J1 - Extended Position & Jn - Position
+      if (packetHandler_->write1ByteTxRx(portHandler_, id, ADDR_OPERATING_MODE, mode, &dxl_error) != COMM_SUCCESS){
         std::cerr << "Failed to set operating mode for motor ID " << static_cast<int>(id) << std::endl;
         return false;
       }
+
+      // Enable torque
       if (packetHandler_->write1ByteTxRx(portHandler_, id, ADDR_TORQUE_ENABLE, 1, &dxl_error) != COMM_SUCCESS){
         std::cerr << "Failed to enable torque for motor ID " << static_cast<int>(id) << std::endl;
         return false;
       }
+
+      // Set PID gains
+      if (j == 0) { // J1
+        change_position_gain(id, 800, 0, 0);
+        change_velocity_gain(id, 100, 20);
+      }
+      else if (j == 1) { // J2
+        change_position_gain(id, 2562, 1348, 809);
+        change_velocity_gain(id, 1079, 3843);
+      }
+      else if (j == 2) { // J3
+        change_position_gain(id, 2500, 1341, 3843);
+        change_velocity_gain(id, 1314, 9102);
+      }
+      else if (j == 3) { // J4
+        change_position_gain(id, 2700, 390, 1238);
+        change_velocity_gain(id, 2023, 2023);
+      }
+      else if (j == 4) { // J5
+        change_position_gain(id, 700, 0, 0);
+        change_velocity_gain(id, 100, 1920);
+      }
     }
   }
-
-  // Set PID gains
-  change_position_gain(1, 100, 30, 0);
-  change_velocity_gain(1, 100, 20);
-  change_position_gain(2, 2500, 270, 0);
-  change_velocity_gain(2, 2100, 220);
 
   groupSyncWrite_ = new GroupSyncWrite(portHandler_, packetHandler_, ADDR_GOAL_POSITION, 4);
   groupSyncRead_  = new GroupSyncRead(portHandler_, packetHandler_, ADDR_PRESENT_POSITION, 4);
@@ -217,18 +323,10 @@ void DynamixelNode::change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16
 void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg) {
 
   for (uint8_t i = 0; i < 5; ++i) {
-    if (i != 3){
-      arm_des_rad[0][i] = -msg->a1_des[i];  // Arm 1
-      arm_des_rad[1][i] = -msg->a2_des[i];  // Arm 2
-      arm_des_rad[2][i] = -msg->a3_des[i];  // Arm 3
-      arm_des_rad[3][i] = -msg->a4_des[i];  // Arm 4
-    }
-    else{
-      arm_des_rad[0][i] = msg->a1_des[i];   // Arm 1
-      arm_des_rad[1][i] = msg->a2_des[i];   // Arm 2
-      arm_des_rad[2][i] = msg->a3_des[i];   // Arm 3
-      arm_des_rad[3][i] = msg->a4_des[i];   // Arm 4
-    }
+    arm_des_rad[0][i] = msg->a1_des[i];   // Arm 1
+    arm_des_rad[1][i] = msg->a2_des[i];   // Arm 2
+    arm_des_rad[2][i] = msg->a3_des[i];   // Arm 3
+    arm_des_rad[3][i] = msg->a4_des[i];   // Arm 4
   }
 
   arm_des_ppr[0][0] = msg->a1_des[0] * rad2ppr_J1 + 2048.0;  // Arm 1
@@ -237,12 +335,21 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
   arm_des_ppr[3][0] = msg->a4_des[0] * rad2ppr_J1 + 2048.0;  // Arm 4
     
   for (uint8_t i = 1; i < 5; ++i) {
-    arm_des_ppr[0][i] = msg->a1_des[i] * rad2ppr + 2048.0;   // Arm 1
-    arm_des_ppr[1][i] = msg->a2_des[i] * rad2ppr + 2048.0;   // Arm 2
-    arm_des_ppr[2][i] = msg->a3_des[i] * rad2ppr + 2048.0;   // Arm 3
-    arm_des_ppr[3][i] = msg->a4_des[i] * rad2ppr + 2048.0;   // Arm 4
+    if (i == 3){
+      arm_des_ppr[0][i] = msg->a1_des[i] * rad2ppr + 2048.0;  // Arm 1
+      arm_des_ppr[1][i] = msg->a2_des[i] * rad2ppr + 2048.0;  // Arm 2
+      arm_des_ppr[2][i] = msg->a3_des[i] * rad2ppr + 2048.0;  // Arm 3
+      arm_des_ppr[3][i] = msg->a4_des[i] * rad2ppr + 2048.0;  // Arm 4
+    }
+    else {
+      arm_des_ppr[0][i] = -msg->a1_des[i] * rad2ppr + 2048.0;   // Arm 1
+      arm_des_ppr[1][i] = -msg->a2_des[i] * rad2ppr + 2048.0;   // Arm 2
+      arm_des_ppr[2][i] = -msg->a3_des[i] * rad2ppr + 2048.0;   // Arm 3
+      arm_des_ppr[3][i] = -msg->a4_des[i] * rad2ppr + 2048.0;   // Arm 4
+    }
   }
 }
+
 
 void DynamixelNode::heartbeat_timer_callback() {
   // gate until handshake done
