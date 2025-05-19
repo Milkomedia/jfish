@@ -130,6 +130,25 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   state_->R(2,1) = 2.0 * (yz + wx);
   state_->R(2,2) = 1.0 - 2.0 * (xx + yy);
 
+  // // Throttle printing at 10 Hz
+  // static rclcpp::Time last_print_time = this->now();
+  // auto now = this->now();
+  // // 100 ms 이상 경과했을 때만 출력
+  // if ((now - last_print_time).nanoseconds() > static_cast<int64_t>(100e6)) {
+  //   last_print_time = now;
+
+  //   // Format R matrix with fixed-point, 2 decimals
+  //   std::ostringstream oss;
+  //   oss << std::fixed << std::setprecision(2);
+  //   oss << "Rotation matrix R:\n"
+  //       << "[" << state_->R(0,0) << " " << state_->R(0,1) << " " << state_->R(0,2) << "]\n"
+  //       << "[" << state_->R(1,0) << " " << state_->R(1,1) << " " << state_->R(1,2) << "]\n"
+  //       << "[" << state_->R(2,0) << " " << state_->R(2,1) << " " << state_->R(2,2) << "]";
+
+  //   // Print via ROS2_INFO
+  //   RCLCPP_INFO(this->get_logger(), "\n%s", oss.str().c_str());
+  // }
+
   // gyro (copy to controller-state && gui-sending variable)
   state_->W << msg->w[0], -msg->w[1], -msg->w[2];
   roll_[1] = msg->w[0]; pitch_[1] = msg->w[1]; yaw_[1] = msg->w[2];
@@ -138,8 +157,6 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   roll_[0]  = std::atan2(2.0*(wx + yz), 1.0 - 2.0*(xx + yy));
   pitch_[0] = std::asin (2.0*(wy - xz));
   yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz));
-
-  RCLCPP_INFO(this->get_logger(), "%.5f", w);
 }
 
 void ControllerNode::mujocoCallback(const mujoco_interfaces::msg::MujocoState::SharedPtr msg) {

@@ -17,9 +17,14 @@
 #include "fdcl/control.hpp"
 #include "controller_param.h"
 
+//////////////////////////////////////////////////////
+#include <sstream>
+#include <iomanip>
+///////////////////////////////////////////////
+
 #define Loop_us 500 // controller thread loop dt [us]
 
-#define CMD_XY_MAX 4.0     // pos cmd range mapped to [-k, k]m (x,y)
+#define CMD_XY_MAX 1.5     // pos cmd range mapped to [-k, k]m (x,y)
 #define CMD_Z_MAX  1.5     // pos cmd range mapped to [ 0, k]m (z)
 #define CMD_YAW_SPD 3.0    // speed at which the yaw command is added.
 

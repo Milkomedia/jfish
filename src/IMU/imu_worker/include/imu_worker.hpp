@@ -13,7 +13,11 @@
 #include <cmath>
 #include <rclcpp/executors/single_threaded_executor.hpp>
 
+#include <thread>
+
 constexpr double two_PI = 2.0 * M_PI;
+constexpr double INV_SQRT2 = 0.7071067811865475244;
+
 constexpr double noise_quat_std_dev = 0.001;
 constexpr double noise_gyro_std_dev = 0.005;
 constexpr double noise_accel_std_dev = 0.01;
@@ -76,7 +80,7 @@ private:
   std::normal_distribution<double> accel_dist_;
 
   // Real imu (microstrain) Data
-  IMUdata real_imu_data;
+  IMUdata real_imu_data_;
 
   // Buffer to store recent IMU callback timestamps for freq estimation
   std::deque<rclcpp::Time> imu_stamp_buffer_;

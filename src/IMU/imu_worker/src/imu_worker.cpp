@@ -78,7 +78,6 @@ IMUnode::IMUnode()
     RCLCPP_ERROR(this->get_logger(), "Unknown mode: %s. No initialization performed.", mode.c_str());
     exit(1);
   }
-
 }
 
 /* for real */
@@ -86,26 +85,97 @@ void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
   // This callback must be called in 900hz
   rclcpp::Time now_time = this->now();
   
-  real_imu_data.q[0] = msg->orientation.w;
-  real_imu_data.q[1] = msg->orientation.x;
-  real_imu_data.q[2] = msg->orientation.y;
-  real_imu_data.q[3] = msg->orientation.z;
+  real_imu_data_.q[0] = msg->orientation.w;
+  real_imu_data_.q[1] = msg->orientation.x;
+  real_imu_data_.q[2] = msg->orientation.y;
+  real_imu_data_.q[3] = msg->orientation.z;
 
-  real_imu_data.w[0] = msg->angular_velocity.x;
-  real_imu_data.w[1] = msg->angular_velocity.y;
-  real_imu_data.w[2] = msg->angular_velocity.z;
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////
+  const double w = msg->orientation.w;
+  const double x = msg->orientation.x;
+  const double y = msg->orientation.y;
+  const double z = msg->orientation.z;
+  
+  const double xx = x * x;
+  const double yy = y * y;
+  const double zz = z * z;
+  const double xy = x * y;
+  const double xz = x * z;
+  const double yz = y * z;
+  const double wx = w * x;
+  const double wy = w * y;
+  const double wz = w * z;
+
+  double r11 = 1.0 - 2.0 * (yy + zz);
+  double r12 = 2.0 * (xy - wz);
+  double r13 = 2.0 * (xz + wy);
+  double r21 = 2.0 * (xy + wz);
+  double r22 = 1.0 - 2.0 * (xx + zz);
+  double r23 = 2.0 * (yz - wx);
+  double r31 = 2.0 * (xz - wy);
+  double r32 = 2.0 * (yz + wx);
+  double r33 = 1.0 - 2.0 * (xx + yy);
+
+  // Throttle printing at 10 Hz
+  static rclcpp::Time last_print_time = this->now();
+  auto now = this->now();
+  // 100 ms 이상 경과했을 때만 출력
+  if ((now - last_print_time).nanoseconds() > static_cast<int64_t>(100e6)) {
+    last_print_time = now;
+
+    // Format R matrix with fixed-point, 2 decimals
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    oss << "Rotation matrix R:\n"
+        << "[" << r11 << " " << r12 << " " << r13 << "]\n"
+        << "[" << r21 << " " << r22 << " " << r23 << "]\n"
+        << "[" << r31 << " " << r32 << " " << r33 << "]";
+
+    // Print via ROS2_INFO
+    RCLCPP_INFO(this->get_logger(), "\n%s", oss.str().c_str());
+  }
+  ///////////////////////////////////////////////////
+
+
+
+
+
+  // // unpack original quaternion
+  // double w = msg->orientation.w;
+  // double x = msg->orientation.x;
+  // double y = msg->orientation.y;
+  // double z = msg->orientation.z;
+
+  // // apply z-axis +90° then x-axis 180° rotation
+  // real_imu_data_.q[0] = -(x + y) * INV_SQRT2;  // w'
+  // real_imu_data_.q[1] =  (w - z) * INV_SQRT2;  // x'
+  // real_imu_data_.q[2] =  (w + z) * INV_SQRT2;  // y'
+  // real_imu_data_.q[3] =  (x - y) * INV_SQRT2;  // z'
+
+  real_imu_data_.w[0] = msg->angular_velocity.x;
+  real_imu_data_.w[1] = msg->angular_velocity.y;
+  real_imu_data_.w[2] = msg->angular_velocity.z;
 
   std::array<double, 3> local_a = {
     msg->linear_acceleration.x,
     msg->linear_acceleration.y,
     msg->linear_acceleration.z
   };
-  auto global_a = rotate_accel_to_world(real_imu_data.q, local_a);
+  auto global_a = rotate_accel_to_world(real_imu_data_.q, local_a);
   //auto global_a = local_a;
 
-  real_imu_data.a[0] = global_a[0];
-  real_imu_data.a[1] = global_a[1];
-  real_imu_data.a[2] = global_a[2];
+  real_imu_data_.a[0] = global_a[0];
+  real_imu_data_.a[1] = global_a[1];
+  real_imu_data_.a[2] = global_a[2];
 
   // Store timestamp for later frequency estimation
   imu_stamp_buffer_.push_back(now_time);
@@ -113,9 +183,9 @@ void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
 
 void IMUnode::PublishMicroStrainMeasurement() { // Timer callbacked as 1kHz
   auto output_msg = imu_interfaces::msg::ImuMeasured();
-  output_msg.q = { real_imu_data.q[0], real_imu_data.q[1], real_imu_data.q[2], real_imu_data.q[3] };
-  output_msg.w = { real_imu_data.w[0], real_imu_data.w[1], real_imu_data.w[2] };
-  output_msg.a = { real_imu_data.a[0], real_imu_data.a[1], real_imu_data.a[2] };
+  output_msg.q = { real_imu_data_.q[0], real_imu_data_.q[1], real_imu_data_.q[2], real_imu_data_.q[3] };
+  output_msg.w = { real_imu_data_.w[0], real_imu_data_.w[1], real_imu_data_.w[2] };
+  output_msg.a = { real_imu_data_.a[0], real_imu_data_.a[1], real_imu_data_.a[2] };
   imu_publisher_->publish(output_msg);
 
   // imu disconnect(or hz dropping) monitoring
@@ -127,11 +197,10 @@ void IMUnode::PublishMicroStrainMeasurement() { // Timer callbacked as 1kHz
 
   double freq_est = static_cast<double>(imu_stamp_buffer_.size()) / check_horizon_.seconds();
 
-  if (freq_est < 830.0 && hb_enabled_) {
-    RCLCPP_WARN(this->get_logger(), "IMU callback freq dropped to %.1f Hz (<830 Hz). Disabling heartbeat.", freq_est);
+  if (freq_est < 100.0 && hb_enabled_) {
+    RCLCPP_WARN(this->get_logger(), "IMU callback freq dropped to %.1f Hz (<100 Hz). Disabling heartbeat.", freq_est);
     hb_enabled_ = false;
   }
-  else{RCLCPP_WARN(this->get_logger(), "%.5f", real_imu_data.q[2]);}
 }
 
 bool IMUnode::imu_hz_check() {
@@ -142,7 +211,7 @@ bool IMUnode::imu_hz_check() {
   }
   
   double freq = static_cast<double>(imu_stamp_buffer_.size()) / check_horizon_.seconds();
-  return (freq >= 800.0);
+  return (freq >= 130.0);
 }
 
 /* for sim */
