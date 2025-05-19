@@ -157,6 +157,8 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   roll_[0]  = std::atan2(2.0*(wx + yz), 1.0 - 2.0*(xx + yy));
   pitch_[0] = std::asin (2.0*(wy - xz));
   yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz));
+
+  // RCLCPP_INFO(this->get_logger(), "gyro x : %.4f rad/s", msg->w[0]);
 }
 
 void ControllerNode::mujocoCallback(const mujoco_interfaces::msg::MujocoState::SharedPtr msg) {

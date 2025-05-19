@@ -67,7 +67,7 @@ IMUnode::IMUnode()
 
 /* for real */
 void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
-  // This callback must be called in 900hz
+  // This callback must be called in 500hz
   rclcpp::Time now_time = this->now();
   
   real_imu_data_.q[0] = msg->orientation.w;
@@ -98,10 +98,12 @@ void IMUnode::PublishMicroStrainMeasurement() { // Timer callbacked as 1kHz
 
   double freq_est = static_cast<double>(imu_stamp_buffer_.size()) / check_horizon_.seconds();
 
-  if (freq_est < 100.0 && hb_enabled_) {
+  if (freq_est < 150.0 && hb_enabled_) {
     RCLCPP_WARN(this->get_logger(), "IMU callback freq dropped to %.1f Hz (<100 Hz). Disabling heartbeat.", freq_est);
     hb_enabled_ = false;
   }
+
+  // RCLCPP_INFO(this->get_logger(), "IMU is %.1f Hz", freq_est);
 }
 
 bool IMUnode::imu_hz_check() {
@@ -112,7 +114,9 @@ bool IMUnode::imu_hz_check() {
   }
   
   double freq = static_cast<double>(imu_stamp_buffer_.size()) / check_horizon_.seconds();
-  return (freq >= 130.0);
+  // RCLCPP_INFO(this->get_logger(), "IMU is %.1f Hz", freq);
+
+  return (freq >= 200.0);
 }
 
 /* for sim */
