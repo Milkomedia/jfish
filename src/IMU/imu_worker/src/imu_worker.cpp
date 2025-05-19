@@ -11,27 +11,12 @@ return { a * e - b * f - c * g - d * h,    // Real part
          a * h + b * g - c * f + d * e };  // k component
 }
 
-constexpr inline std::array<double, 3> rotate_accel_to_world(const std::array<double, 4>& q, const std::array<double, 3>& a_local) noexcept {
-  double w = q[0], x = q[1], y = q[2], z = q[3];
-  double R[3][3] = {
-    {1 - 2*y*y - 2*z*z,     2*x*y - 2*z*w,     2*x*z + 2*y*w},
-    {    2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z,     2*y*z - 2*x*w},
-    {    2*x*z - 2*y*w,     2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y}
-  };
-  return {
-    R[0][0]*a_local[0] + R[0][1]*a_local[1] + R[0][2]*a_local[2],
-    R[1][0]*a_local[0] + R[1][1]*a_local[1] + R[1][2]*a_local[2],
-    R[2][0]*a_local[0] + R[2][1]*a_local[1] + R[2][2]*a_local[2]
-  };
-}
-
 IMUnode::IMUnode()
 : Node("imu_node"),
   gen_(std::random_device{}()),
   angle_dist_(0.0, noise_quat_std_dev),
   axis_dist_(0.0, 1.0),
-  noise_dist_(0.0, noise_gyro_std_dev),
-  accel_dist_(0.0, noise_accel_std_dev)
+  noise_dist_(0.0, noise_gyro_std_dev)
 {
   // 1) publishers
   imu_publisher_ = this->create_publisher<imu_interfaces::msg::ImuMeasured>("imu_mea", 1);
@@ -90,92 +75,9 @@ void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
   real_imu_data_.q[2] = msg->orientation.y;
   real_imu_data_.q[3] = msg->orientation.z;
 
-
-
-
-
-
-
-
-
-
-/////////////////////////////////////////////////
-  const double w = msg->orientation.w;
-  const double x = msg->orientation.x;
-  const double y = msg->orientation.y;
-  const double z = msg->orientation.z;
-  
-  const double xx = x * x;
-  const double yy = y * y;
-  const double zz = z * z;
-  const double xy = x * y;
-  const double xz = x * z;
-  const double yz = y * z;
-  const double wx = w * x;
-  const double wy = w * y;
-  const double wz = w * z;
-
-  double r11 = 1.0 - 2.0 * (yy + zz);
-  double r12 = 2.0 * (xy - wz);
-  double r13 = 2.0 * (xz + wy);
-  double r21 = 2.0 * (xy + wz);
-  double r22 = 1.0 - 2.0 * (xx + zz);
-  double r23 = 2.0 * (yz - wx);
-  double r31 = 2.0 * (xz - wy);
-  double r32 = 2.0 * (yz + wx);
-  double r33 = 1.0 - 2.0 * (xx + yy);
-
-  // Throttle printing at 10 Hz
-  static rclcpp::Time last_print_time = this->now();
-  auto now = this->now();
-  // 100 ms 이상 경과했을 때만 출력
-  if ((now - last_print_time).nanoseconds() > static_cast<int64_t>(100e6)) {
-    last_print_time = now;
-
-    // Format R matrix with fixed-point, 2 decimals
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2);
-    oss << "Rotation matrix R:\n"
-        << "[" << r11 << " " << r12 << " " << r13 << "]\n"
-        << "[" << r21 << " " << r22 << " " << r23 << "]\n"
-        << "[" << r31 << " " << r32 << " " << r33 << "]";
-
-    // Print via ROS2_INFO
-    RCLCPP_INFO(this->get_logger(), "\n%s", oss.str().c_str());
-  }
-  ///////////////////////////////////////////////////
-
-
-
-
-
-  // // unpack original quaternion
-  // double w = msg->orientation.w;
-  // double x = msg->orientation.x;
-  // double y = msg->orientation.y;
-  // double z = msg->orientation.z;
-
-  // // apply z-axis +90° then x-axis 180° rotation
-  // real_imu_data_.q[0] = -(x + y) * INV_SQRT2;  // w'
-  // real_imu_data_.q[1] =  (w - z) * INV_SQRT2;  // x'
-  // real_imu_data_.q[2] =  (w + z) * INV_SQRT2;  // y'
-  // real_imu_data_.q[3] =  (x - y) * INV_SQRT2;  // z'
-
   real_imu_data_.w[0] = msg->angular_velocity.x;
   real_imu_data_.w[1] = msg->angular_velocity.y;
   real_imu_data_.w[2] = msg->angular_velocity.z;
-
-  std::array<double, 3> local_a = {
-    msg->linear_acceleration.x,
-    msg->linear_acceleration.y,
-    msg->linear_acceleration.z
-  };
-  auto global_a = rotate_accel_to_world(real_imu_data_.q, local_a);
-  //auto global_a = local_a;
-
-  real_imu_data_.a[0] = global_a[0];
-  real_imu_data_.a[1] = global_a[1];
-  real_imu_data_.a[2] = global_a[2];
 
   // Store timestamp for later frequency estimation
   imu_stamp_buffer_.push_back(now_time);
@@ -185,7 +87,6 @@ void IMUnode::PublishMicroStrainMeasurement() { // Timer callbacked as 1kHz
   auto output_msg = imu_interfaces::msg::ImuMeasured();
   output_msg.q = { real_imu_data_.q[0], real_imu_data_.q[1], real_imu_data_.q[2], real_imu_data_.q[3] };
   output_msg.w = { real_imu_data_.w[0], real_imu_data_.w[1], real_imu_data_.w[2] };
-  output_msg.a = { real_imu_data_.a[0], real_imu_data_.a[1], real_imu_data_.a[2] };
   imu_publisher_->publish(output_msg);
 
   // imu disconnect(or hz dropping) monitoring

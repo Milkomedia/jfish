@@ -16,6 +16,7 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
 
   // Create ROS2 publishers for heartbeat and motor positions
   heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/dynamixel_state", 1);
+  pos_write_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("joint_write", 1);
   pos_mea_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("joint_mea", 1);
 
   // Create timer for heartbeat
@@ -58,7 +59,6 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
   else if (mode == "sim"){
     // Create ROS2 subscriber for joint values
     mujoco_subscriber_ = this->create_subscription<mujoco_interfaces::msg::MuJoCoMeas>("mujoco_meas", 1, std::bind(&DynamixelNode::mujoco_callback, this, std::placeholders::_1));
-    mujoco_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("joint_write", 1);
 
     // Create timer for Write/Read motor positions
     motor_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), std::bind(&DynamixelNode::Mujoco_Pub, this));
@@ -84,7 +84,7 @@ void DynamixelNode::Mujoco_Pub() {
     msg1.a3_des[i] = arm_des_rad[2][i];  // Arm 3
     msg1.a4_des[i] = arm_des_rad[3][i];  // Arm 4
   }
-  mujoco_publisher_->publish(msg1);
+  pos_write_publisher_->publish(msg1);
 
   /*  Publish to allocator  */
   dynamixel_interfaces::msg::JointVal msg2;
@@ -108,6 +108,85 @@ void DynamixelNode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::Sh
     arm_mea[2][i] = msg->a3_q[i];   // Arm 3
     arm_mea[3][i] = msg->a4_q[i];   // Arm 4
   }
+}
+
+/* for real */
+void DynamixelNode::Dynamixel_Write_Read() {
+
+  if (!init_read_) {
+    align_dynamixel();
+    return;
+  }
+  
+  /*  Write  */
+  groupSyncWrite_->clearParam();
+  
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < 5; ++j) {
+      // Apply LPF in PPR domain
+      filtered_des_ppr[i][j] = static_cast<int>(
+        0.2 * arm_des_ppr[i][j] + 0.8 * filtered_des_ppr[i][j]
+      );
+  
+      uint8_t param_goal_position[4] = {
+        DXL_LOBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
+        DXL_LOBYTE(DXL_HIWORD(filtered_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_HIWORD(filtered_des_ppr[i][j]))
+      };
+  
+      if (!groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position)){dnmxl_err_cnt_++;}
+    }
+  }
+
+  if (groupSyncWrite_->txPacket() != COMM_SUCCESS){dnmxl_err_cnt_++;}
+
+  /*  Read  */
+  groupSyncRead_->clearParam();
+
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < 5; ++j)
+      if (!groupSyncRead_->addParam(DXL_IDS[i][j]))
+        dnmxl_err_cnt_++;
+  }
+
+  if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {dnmxl_err_cnt_++;}
+
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < 5; ++j) {
+      uint8_t id = DXL_IDS[i][j];
+
+      if (!groupSyncRead_->isAvailable(id, ADDR_PRESENT_POSITION, 4)) {
+        dnmxl_err_cnt_++;
+        continue;
+      }
+
+      int ppr = groupSyncRead_->getData(id, ADDR_PRESENT_POSITION, 4);
+
+      if (j == 0) {
+        arm_mea[i][j] = static_cast<double>(ppr-2048) * ppr2rad_J1;
+      } 
+      else {
+        double rad = static_cast<double>(ppr-2048) * ppr2rad;
+        arm_mea[i][j] = (j == 3) ? rad : -rad;
+      }
+    }
+  }
+
+  /*  Publish  */
+  dynamixel_interfaces::msg::JointVal msg;
+  for (size_t j = 0; j < 5; ++j) {
+    msg.a1_mea[j] = arm_mea[0][j];  // Arm 1
+    msg.a2_mea[j] = arm_mea[1][j];  // Arm 2
+    msg.a3_mea[j] = arm_mea[2][j];  // Arm 3
+    msg.a4_mea[j] = arm_mea[3][j];  // Arm 4
+    msg.a1_des[j] = arm_des_rad[0][j];  // Arm 1
+    msg.a2_des[j] = arm_des_rad[1][j];  // Arm 2
+    msg.a3_des[j] = arm_des_rad[2][j];  // Arm 3
+    msg.a4_des[j] = arm_des_rad[3][j];  // Arm 4
+  }
+
+  pos_mea_publisher_->publish(msg);
 }
 
 void DynamixelNode::align_dynamixel() {
@@ -178,82 +257,6 @@ void DynamixelNode::align_dynamixel() {
     init_read_ = true;
     // RCLCPP_INFO(get_logger(), "Dynamixel initial alignment done.");
   }
-}
-
-/* for real */
-void DynamixelNode::Dynamixel_Write_Read() {
-
-  if (!init_read_) {
-    align_dynamixel();
-    return;
-  }
-  
-  /*  Write  */
-  groupSyncWrite_->clearParam();
-  
-  for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j) {
-      // Apply LPF in PPR domain
-      filtered_des_ppr[i][j] = static_cast<int>(
-        0.2 * arm_des_ppr[i][j] + 0.8 * filtered_des_ppr[i][j]
-      );
-  
-      uint8_t param_goal_position[4] = {
-        DXL_LOBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
-        DXL_LOBYTE(DXL_HIWORD(filtered_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_HIWORD(filtered_des_ppr[i][j]))
-      };
-  
-      if (!groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position)){dnmxl_err_cnt_++;}
-    }
-  }
-
-  if (groupSyncWrite_->txPacket() != COMM_SUCCESS){dnmxl_err_cnt_++;}
-
-  /*  Read  */
-  groupSyncRead_->clearParam();
-
-  for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j)
-      if (!groupSyncRead_->addParam(DXL_IDS[i][j]))
-        dnmxl_err_cnt_++;
-  }
-
-  if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {dnmxl_err_cnt_++;}
-
-  for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j) {
-      uint8_t id = DXL_IDS[i][j];
-
-      if (!groupSyncRead_->isAvailable(id, ADDR_PRESENT_POSITION, 4)) {
-        dnmxl_err_cnt_++;
-        continue;
-      }
-
-      int ppr = groupSyncRead_->getData(id, ADDR_PRESENT_POSITION, 4);
-
-      if (j == 0) {
-        arm_mea[i][j] = static_cast<double>(ppr) * ppr2rad_J1;
-      } 
-      else {
-        ppr -= 2048;
-        double rad = static_cast<double>(ppr) * ppr2rad;
-        arm_mea[i][j] = (j == 3) ? rad : -rad;
-      }
-    }
-  }
-
-  /*  Publish  */
-  dynamixel_interfaces::msg::JointVal msg;
-  for (size_t j = 0; j < 5; ++j) {
-    msg.a1_mea[j] = arm_mea[0][j];
-    msg.a2_mea[j] = arm_mea[1][j];
-    msg.a3_mea[j] = arm_mea[2][j];
-    msg.a4_mea[j] = arm_mea[3][j];
-  }
-
-  pos_mea_publisher_->publish(msg);
 }
 
 bool DynamixelNode::init_Dynamixel() {

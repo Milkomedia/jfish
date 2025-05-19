@@ -34,7 +34,6 @@ struct IMUdata
 {
   std::array<double, 4> q;
   std::array<double, 3> w;
-  std::array<double, 3> a;
 };
 
 class IMUnode : public rclcpp::Node {
@@ -77,7 +76,6 @@ private:
   std::normal_distribution<double> angle_dist_;
   std::normal_distribution<double> axis_dist_;
   std::normal_distribution<double> noise_dist_;
-  std::normal_distribution<double> accel_dist_;
 
   // Real imu (microstrain) Data
   IMUdata real_imu_data_;

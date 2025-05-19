@@ -67,7 +67,7 @@ private:
   rclcpp::Subscription<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_val_subscriber_;
   rclcpp::Subscription<mujoco_interfaces::msg::MuJoCoMeas>::SharedPtr mujoco_subscriber_;
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
-  rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr mujoco_publisher_;
+  rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr pos_write_publisher_;
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr pos_mea_publisher_;
   rclcpp::TimerBase::SharedPtr motor_timer_;
   rclcpp::TimerBase::SharedPtr heartbeat_timer_;
@@ -110,10 +110,10 @@ private:
 
   // mujoco or dynamixel read
   double arm_mea[4][5] = { // [rad]
-    {0., -0.78540, 1.57078, 0.78540, 0.},
-    {0., -0.78540, 1.57078, 0.78540, 0.},
-    {0., -0.78540, 1.57078, 0.78540, 0.},
-    {0., -0.78540, 1.57078, 0.78540, 0.}
+    {0., -0.20, 0.87, 0.86, 0.},
+    {0., -0.20, 0.87, 0.86, 0.},
+    {0., -0.20, 0.87, 0.86, 0.},
+    {0., -0.20, 0.87, 0.86, 0.}
   };
 
   double filtered_des_ppr[4][5] = { // [rad]

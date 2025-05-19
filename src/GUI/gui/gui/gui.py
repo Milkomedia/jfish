@@ -469,9 +469,9 @@ class DebugGUI(QWidget):
         self.controller_data["sbus_chnl"] = msg.sbus_chnl
         self.controller_data["pos_cmd"] = msg.pos_cmd
         self.controller_data["wrench_des"] = msg.wrench_des
-        self.controller_data["imu_roll"] = msg.imu_roll
-        self.controller_data["imu_pitch"] = msg.imu_pitch
-        self.controller_data["imu_yaw"] = msg.imu_yaw
+        self.controller_data["imu_roll"] = msg.imu_roll*180/pi
+        self.controller_data["imu_pitch"] = msg.imu_pitch*180/pi
+        self.controller_data["imu_yaw"] = msg.imu_yaw*180/pi
         self.controller_data["opti_x"] = msg.opti_x
         self.controller_data["opti_y"] = msg.opti_y
         self.controller_data["opti_z"] = msg.opti_z

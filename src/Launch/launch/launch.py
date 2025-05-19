@@ -51,6 +51,22 @@ def generate_launch_description():
     )
 
     nodes = [
+        # IMU Node
+        Node(
+            package='imu_worker',
+            executable='imu_worker',
+            name='imu_node',
+            parameters=[{'mode': mode}],
+        ),
+
+        # Optitrack Node
+        Node(
+            package='mocap',
+            executable='mocap_worker',
+            name='optitrack_node',
+            parameters=[{'mode': mode}],
+        ),
+
         # MuJoCo Node (Run only when mode==sim)
         Node(
             package='mujoco_sim',
@@ -72,22 +88,6 @@ def generate_launch_description():
             name='motion_capture_tracking',
             condition=IfCondition(PythonExpression(["'", mode, "' == 'real'"])),
             parameters=[opti_node_config],
-        ),
-
-        # Optitrack Node
-        Node(
-            package='mocap',
-            executable='mocap_worker',
-            name='optitrack_node',
-            parameters=[{'mode': mode}],
-        ),
-
-        # IMU Node
-        Node(
-            package='imu_worker',
-            executable='imu_worker',
-            name='imu_node',
-            parameters=[{'mode': mode}],
         ),
 
         # SBUS Worker Node
