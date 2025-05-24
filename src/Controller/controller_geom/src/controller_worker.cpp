@@ -130,6 +130,17 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   state_->R(2,1) = 2.0 * (yz + wx);
   state_->R(2,2) = 1.0 - 2.0 * (xx + yy);
 
+  
+  // state_->R(0,0) = 1.0 - 2.0 * (yy + zz);
+  // state_->R(0,1) = 2.0 * (xy - wz);
+  // state_->R(0,2) = 2.0 * (xz + wy);
+  // state_->R(1,0) = 2.0 * (xy + wz);
+  // state_->R(1,1) = 1.0 - 2.0 * (xx + zz);
+  // state_->R(1,2) = 2.0 * (yz - wx);
+  // state_->R(2,0) = 2.0 * (xz - wy);
+  // state_->R(2,1) = 2.0 * (yz + wx);
+  // state_->R(2,2) = 1.0 - 2.0 * (xx + yy);
+
   // // Throttle printing at 10 Hz
   // static rclcpp::Time last_print_time = this->now();
   // auto now = this->now();

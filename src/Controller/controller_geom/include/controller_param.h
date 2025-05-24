@@ -34,6 +34,43 @@ struct UAVParameters {
 inline ControlParameters getControlParameters() {
   ControlParameters param;
   param.use_decoupled_yaw = true;
+  param.kX << 0.0, 0.0, 0.0;
+  param.kV << 0.0, 0.0, 0.0;
+  param.kR << 7.0, 7.0, 3.0;
+  param.kW << 3.0, 3.0, 3.0;
+  return param;
+}
+
+inline IntegralParameters getIntegralParameters() {
+  IntegralParameters param;
+  param.kIX = 0.0;
+  param.ki = 0.0;
+  param.kIR = 0.0;
+  param.kI = 0.00;
+  param.kyI = 0.0;
+  param.c1 = 0.0; //
+  param.c2 = 0.0;
+  param.c3 = 0.0;
+  return param;
+}
+
+inline UAVParameters getUAVParameters() {
+  UAVParameters param;
+  param.m = 1.5; 
+  param.g = 9.80665;
+  return param;
+}
+
+}
+
+#endif // CONTROLLER_PARAM_H
+
+/*
+sim gain
+
+inline ControlParameters getControlParameters() {
+  ControlParameters param;
+  param.use_decoupled_yaw = true;
   param.kX << 20.0, 20.0, 10.0;
   param.kV << 9.0, 9.0, 10.0;
   param.kR << 5.0, 5.0, 2.0;
@@ -56,11 +93,9 @@ inline IntegralParameters getIntegralParameters() {
 
 inline UAVParameters getUAVParameters() {
   UAVParameters param;
-  param.m = 4.751729;
+  param.m = 4.751729; 
   param.g = 9.80665;
   return param;
 }
 
-}
-
-#endif // CONTROLLER_PARAM_H
+*/

@@ -318,7 +318,7 @@ class DebugGUI(QWidget):
         imu_label_layout = QHBoxLayout()
         padding_label = QLabel()
         imu_label_layout.addWidget(padding_label)
-        imu_labels = ["rad", "rad/s", "rad/s^2"]
+        imu_labels = ["deg", "deg/s", "deg/s^2"]
         for label in imu_labels:
             rpy_label = QLabel(label)
             rpy_label.setFixedHeight(35)
@@ -438,10 +438,15 @@ class DebugGUI(QWidget):
             plot_item.getAxis('left').setPen(pg.mkPen(color='k'))
             plot_item.getAxis('left').setTextPen(pg.mkPen(color='k'))
 
+            # # Set y-axis range
+            # if idx == "z": plot_item.setYRange(-0.1, 2.0)
+            # elif idx == "ψ": plot_item.setYRange(-3.14, 3.14)
+            # else: plot_item.setYRange(-2.0, 2.0)
+
             # Set y-axis range
-            if idx == "z": plot_item.setYRange(-0.1, 2.0)
-            elif idx == "ψ": plot_item.setYRange(-3.14, 3.14)
-            else: plot_item.setYRange(-2.0, 2.0)
+            if idx == "z": plot_item.setYRange(0.0, 2.0)
+            elif idx == "ψ": plot_item.setYRange(-45.0, 45.0)
+            else: plot_item.setYRange(-45.0, 45.0)
 
             # Two curves: reference (blue) and measurement (red), each with thicker lines
             curve_ref = plot_widget.plot(name="Ref", pen=pg.mkPen(color='b', width=3))
@@ -569,8 +574,8 @@ class DebugGUI(QWidget):
         self.plot_ref_data[2].append(self.controller_data['pos_cmd'][2])
         self.plot_ref_data[3].append(self.controller_data['pos_cmd'][3])
 
-        self.plot_mea_data[0].append(self.controller_data['opti_x'][0])
-        self.plot_mea_data[1].append(self.controller_data['opti_y'][0])
+        self.plot_mea_data[0].append(self.controller_data['imu_roll'][0])
+        self.plot_mea_data[1].append(self.controller_data['imu_pitch'][0])
         self.plot_mea_data[2].append(self.controller_data['opti_z'][0])
         self.plot_mea_data[3].append(self.controller_data['imu_yaw'][0])
         
