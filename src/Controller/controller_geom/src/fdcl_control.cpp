@@ -27,8 +27,8 @@ fdcl::control::~control(void){};
 
 void fdcl::control::position_control(void){
   // translational error functions
-  eX = Vector3::Zero(); //state->x - command->xd;     // position error - eq (11)
-  eV = Vector3::Zero(); //state->v - command->xd_dot; // velocity error - eq (12)
+  eX = state->x - command->xd;     // position error - eq (11)
+  eV = state->v - command->xd_dot; // velocity error - eq (12)
 
   // if norm(eX) exceeds limit, scale it back
   double eX_norm = eX.norm();

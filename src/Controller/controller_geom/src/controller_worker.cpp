@@ -94,13 +94,13 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 
 void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg) {
   // for controller-variable
-  state_->x << msg->pos[0], -msg->pos[1], -msg->pos[2];
+  state_->x << msg->pos[0], -msg->pos[1], 0.11-msg->pos[2];
   state_->v << msg->vel[0], -msg->vel[1], -msg->vel[2];
   state_->a << msg->acc[0], -msg->acc[1], -msg->acc[2];
   // for debugging-variable
-  x_[0] = msg->pos[0]; y_[0] = msg->pos[1]; z_[0] = msg->pos[2];
+  x_[0] = msg->pos[0]; y_[0] = msg->pos[1]; z_[0] = msg->pos[2]-0.11;
   x_[1] = msg->vel[0]; y_[1] = msg->vel[1]; z_[1] = msg->vel[2];
-  x_[2] = msg->acc[0]; y_[2] = msg->acc[1]; z_[2] = msg->acc[2];
+  x_[2] = msg->acc[0]; y_[2] = msg->acc[1]; z_[2] = msg->acc[2];  
 }
 
 void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg) {

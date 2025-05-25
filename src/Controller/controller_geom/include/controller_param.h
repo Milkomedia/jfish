@@ -34,9 +34,9 @@ struct UAVParameters {
 inline ControlParameters getControlParameters() {
   ControlParameters param;
   param.use_decoupled_yaw = true;
-  param.kX << 0.0, 0.0, 0.0;
+  param.kX << 0.0, 0.0, 10.0;
   param.kV << 0.0, 0.0, 0.0;
-  param.kR << 7.0, 7.0, 3.0;
+  param.kR << 7.0, 7.0, 0.0;
   param.kW << 3.0, 3.0, 3.0;
   return param;
 }
@@ -56,7 +56,7 @@ inline IntegralParameters getIntegralParameters() {
 
 inline UAVParameters getUAVParameters() {
   UAVParameters param;
-  param.m = 1.5; 
+  param.m = 8.35; 
   param.g = 9.80665;
   return param;
 }

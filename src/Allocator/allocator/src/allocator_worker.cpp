@@ -81,6 +81,8 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
       else Transformation_a4 = TB5;
   }
 
+  // RCLCPP_INFO(this->get_logger(), "[%f, %f, %f, %f]",Transformation_a1(2,0), Transformation_a2(2,0), Transformation_a3(2,0), Transformation_a4(2,0));
+
   Vector3d r1 = Transformation_a1.block<3,1>(0,3) - CoM;
   Vector3d r2 = Transformation_a2.block<3,1>(0,3) - CoM;
   Vector3d r3 = Transformation_a3.block<3,1>(0,3) - CoM;

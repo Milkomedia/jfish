@@ -8,7 +8,7 @@ WatchDogNode::WatchDogNode(): Node("watchdog_node"),
   start_time_ = this->now();
 
   std::vector<std::string> node_names = {
-    // "optitrack_node",
+    "optitrack_node",
     "imu_node",
     "sbus_node",
     "arm_changing_node",
