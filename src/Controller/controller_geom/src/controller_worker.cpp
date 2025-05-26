@@ -28,6 +28,16 @@ ControllerNode::ControllerNode()
   command_->xd << 0.0, 0.0, 0.0;  // I don't know why,,, but
   command_->b1d << 1.0, 0.0, 0.0; // without this init, drone crashes.
 
+  rclcpp::executors::SingleThreadedExecutor exec;
+  exec.add_node(shared_from_this());
+
+  while (rclcpp::ok() && !define_initial_yaw()) {
+    exec.spin_some();                                          // 콜백 처리
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  RCLCPP_INFO(this->get_logger(), "INIT YAW %f", inital_yaw_bias_);
+
   // main-tasking thread
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
 
@@ -36,6 +46,23 @@ ControllerNode::ControllerNode()
   hb_enabled_ = true;
 
   last_r_log_time_ = this->now();
+}
+
+bool ControllerNode::define_initial_yaw() {
+  if (yaw_[0] == -0.12321) {
+    return false;
+  }
+  else {
+    inital_yaw_bias_ = yaw_[0];
+    
+    const double c = std::cos(-inital_yaw_bias_);
+    const double s = std::sin(-inital_yaw_bias_);
+    R_yaw_bias_ << c,  -s,  0.0,
+                   s,   c,  0.0,
+                   0.0,  0.0, 1.0;
+
+    return true;
+  }
 }
 
 void ControllerNode::controller_timer_callback() {
@@ -94,11 +121,11 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 
 void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg) {
   // for controller-variable
-  state_->x << msg->pos[0], -msg->pos[1], 0.11-msg->pos[2];
+  state_->x << X_offset+msg->pos[0], Y_offset-msg->pos[1], Z_offset-msg->pos[2];
   state_->v << msg->vel[0], -msg->vel[1], -msg->vel[2];
   state_->a << msg->acc[0], -msg->acc[1], -msg->acc[2];
   // for debugging-variable
-  x_[0] = msg->pos[0]; y_[0] = msg->pos[1]; z_[0] = msg->pos[2]-0.11;
+  x_[0] = msg->pos[0]-X_offset; y_[0] = msg->pos[1]-Y_offset; z_[0] = msg->pos[2]-Z_offset;
   x_[1] = msg->vel[0]; y_[1] = msg->vel[1]; z_[1] = msg->vel[2];
   x_[2] = msg->acc[0]; y_[2] = msg->acc[1]; z_[2] = msg->acc[2];  
 }
@@ -119,46 +146,39 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   const double wx = w * x;
   const double wy = w * y;
   const double wz = w * z;
+
+  Eigen::Matrix3d R;
+
+  R(0,0) =  1.0 - 2.0 * (yy + zz);
+  R(0,1) = -2.0 * (xy - wz);
+  R(0,2) = -2.0 * (xz + wy);
+  R(1,0) = -2.0 * (xy + wz);
+  R(1,1) =  1.0 - 2.0 * (xx + zz);
+  R(1,2) =  2.0 * (yz - wx);
+  R(2,0) = -2.0 * (xz - wy);
+  R(2,1) =  2.0 * (yz + wx);
+  R(2,2) =  1.0 - 2.0 * (xx + yy);
   
-  state_->R(0,0) = 1.0 - 2.0 * (yy + zz);
-  state_->R(0,1) = -2.0 * (xy - wz);
-  state_->R(0,2) = -2.0 * (xz + wy);
-  state_->R(1,0) = -2.0 * (xy + wz);
-  state_->R(1,1) = 1.0 - 2.0 * (xx + zz);
-  state_->R(1,2) = 2.0 * (yz - wx);
-  state_->R(2,0) = -2.0 * (xz - wy);
-  state_->R(2,1) = 2.0 * (yz + wx);
-  state_->R(2,2) = 1.0 - 2.0 * (xx + yy);
+  state_->R = R_yaw_bias_ * R;
 
-  
-  // state_->R(0,0) = 1.0 - 2.0 * (yy + zz);
-  // state_->R(0,1) = 2.0 * (xy - wz);
-  // state_->R(0,2) = 2.0 * (xz + wy);
-  // state_->R(1,0) = 2.0 * (xy + wz);
-  // state_->R(1,1) = 1.0 - 2.0 * (xx + zz);
-  // state_->R(1,2) = 2.0 * (yz - wx);
-  // state_->R(2,0) = 2.0 * (xz - wy);
-  // state_->R(2,1) = 2.0 * (yz + wx);
-  // state_->R(2,2) = 1.0 - 2.0 * (xx + yy);
+  // Throttle printing at 10 Hz
+  static rclcpp::Time last_print_time = this->now();
+  auto now = this->now();
+  // 100 ms 이상 경과했을 때만 출력
+  if ((now - last_print_time).nanoseconds() > static_cast<int64_t>(100e6)) {
+    last_print_time = now;
 
-  // // Throttle printing at 10 Hz
-  // static rclcpp::Time last_print_time = this->now();
-  // auto now = this->now();
-  // // 100 ms 이상 경과했을 때만 출력
-  // if ((now - last_print_time).nanoseconds() > static_cast<int64_t>(100e6)) {
-  //   last_print_time = now;
+    // Format R matrix with fixed-point, 2 decimals
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    oss << "Rotation matrix R:\n"
+        << "[" << state_->R(0,0) << " " << state_->R(0,1) << " " << state_->R(0,2) << "]\n"
+        << "[" << state_->R(1,0) << " " << state_->R(1,1) << " " << state_->R(1,2) << "]\n"
+        << "[" << state_->R(2,0) << " " << state_->R(2,1) << " " << state_->R(2,2) << "]";
 
-  //   // Format R matrix with fixed-point, 2 decimals
-  //   std::ostringstream oss;
-  //   oss << std::fixed << std::setprecision(2);
-  //   oss << "Rotation matrix R:\n"
-  //       << "[" << state_->R(0,0) << " " << state_->R(0,1) << " " << state_->R(0,2) << "]\n"
-  //       << "[" << state_->R(1,0) << " " << state_->R(1,1) << " " << state_->R(1,2) << "]\n"
-  //       << "[" << state_->R(2,0) << " " << state_->R(2,1) << " " << state_->R(2,2) << "]";
-
-  //   // Print via ROS2_INFO
-  //   RCLCPP_INFO(this->get_logger(), "\n%s", oss.str().c_str());
-  // }
+    // Print via ROS2_INFO
+    RCLCPP_INFO(this->get_logger(), "\n%s", oss.str().c_str());
+  }
 
   // gyro (copy to controller-state && gui-sending variable)
   state_->W << msg->w[0], -msg->w[1], -msg->w[2];
@@ -167,7 +187,7 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   // ZYX Tait–Bryan angles
   roll_[0]  = std::atan2(2.0*(wx + yz), 1.0 - 2.0*(xx + yy));
   pitch_[0] = std::asin (2.0*(wy - xz));
-  yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz));
+  yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz)) - inital_yaw_bias_;
 
   // RCLCPP_INFO(this->get_logger(), "gyro x : %.4f rad/s", msg->w[0]);
 }
