@@ -28,17 +28,7 @@ ControllerNode::ControllerNode()
   command_->xd << 0.0, 0.0, 0.0;  // I don't know why,,, but
   command_->b1d << 1.0, 0.0, 0.0; // without this init, drone crashes.
 
-  // rclcpp::executors::SingleThreadedExecutor exec;
-  // exec.add_node(shared_from_this());
-
-  // while (rclcpp::ok() && !define_initial_yaw()) {
-  //   exec.spin_some();                                          // 콜백 처리
-  //   std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  // }
-
-  // RCLCPP_INFO(this->get_logger(), "INIT YAW %f", inital_yaw_bias_);
-
-  // main-tasking thread
+  // main-tasking thread starts
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
 
   // initial handshake: immediately send 42 and enable subsequent heartbeat
@@ -46,38 +36,69 @@ ControllerNode::ControllerNode()
   hb_enabled_ = true;
 }
 
-bool ControllerNode::define_initial_yaw() {
-  if (yaw_[0] == -0.12321) {
-    return false;
-  }
-  else {
-    inital_yaw_bias_ = yaw_[0];
-    
-    const double c = std::cos(-inital_yaw_bias_);
-    const double s = std::sin(-inital_yaw_bias_);
-    R_yaw_bias_ << c,  -s,  0.0,
-                   s,   c,  0.0,
-                   0.0,  0.0, 1.0;
-
-    return true;
-  }
-}
-
 void ControllerNode::controller_timer_callback() {
   fdcl_controller_.position_control();
-  fdcl_controller_.output_fM(f_out, M_out);
+  fdcl_controller_.output_fM(f_out_geom, M_out_geom);
+
+  if (estimator_state_ == 0) { // conventional
+    M_out_pub = M_out_geom;
+  }
+  else{ // d_hat calculte
+    // angular accelation
+    Eigen::Vector3d Omega_dot = (state_->W - prev_Omega_)/Qfilter_dt_; // s
+    filtered_Omega_dot_ = Qfilter_Alpha_*filtered_Omega_dot_ + Qfilter_Beta_*Omega_dot; // Q
+    prev_Omega_ = state_->W;
+
+    Eigen::Matrix3d J_bar_inv = state_->J.inverse();  // this must fixed to z-down frame
+    Eigen::Vector3d Omega_dot_star = J_bar_inv*M_out_geom;
+    Eigen::Vector3d Omega_dot_star_tilde = Omega_dot_star - prev_d_hat_;
+    filtered_Omega_dot_star_tilde_ = Qfilter_Alpha_*filtered_Omega_dot_star_tilde_ + Qfilter_Beta_*Omega_dot_star_tilde; // Q
+
+    Eigen::Vector3d d_hat = filtered_Omega_dot_ - filtered_Omega_dot_star_tilde_;
+    d_hat = (d_hat.cwiseMax(Eigen::Vector3d::Constant(-15.0))).cwiseMin(Eigen::Vector3d::Constant(15.0)); // saturation
+
+    if (estimator_state_ == 1) { // dob apply
+      Eigen::Vector3d M_out_dob_applied = state_->J * Omega_dot_star_tilde;
+      M_out_pub = M_out_dob_applied;
+    }
+    else { // com estimator apply
+      Eigen::Vector3d acc = state_->a - g_ * state_->R * e_3_;
+      Eigen::Matrix3d skew_acc;
+      skew_acc << 0.0,      -acc.z(),  acc.y(),
+                  acc.z(),  0.0,       -acc.x(),
+                 -acc.y(),  acc.x(),   0.0;
+      
+      Eigen::Vector3d F_star(0.0, 0.0, f_out_geom);
+      Eigen::Matrix3d skew_F_star;
+      skew_F_star <<  0.0,         -F_star.z(),   F_star.y(),
+                      F_star.z(),          0.0,  -F_star.x(),
+                    -F_star.y(),   F_star.x(),          0.0;
+                    
+      Eigen::Matrix3d A_hat = m_bar_*J_bar_inv*skew_acc;
+      filtered_A_hat_ = Qfilter_Alpha_*filtered_A_hat_ + Qfilter_Beta_*A_hat;
+      Eigen::Vector3d d2 = k_bar_*J_bar_inv*skew_F_star*Pc_hat_;
+      Eigen::Vector3d Pc_hat_dot = gamma_*filtered_A_hat_.transpose()*(d_hat + d2);
+      Pc_hat_ += Pc_hat_dot; // 1/s
+      Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector3d::Constant(-0.1))).cwiseMin(Eigen::Vector3d::Constant(0.1)); // saturation
+
+      Eigen::Vector3d M_out_com_applied = state_->J * Omega_dot_star_tilde;
+      M_out_pub = M_out_com_applied;
+      
+      // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]", Pc_hat_(0), Pc_hat_(1), Pc_hat_(2));
+    }
+    roll_[2] = filtered_Omega_dot_(0); pitch_[2] = filtered_Omega_dot_(1); yaw_[2] = filtered_Omega_dot_(2);
+    prev_d_hat_ = d_hat;
+
+    roll_[2] = d_hat[0];
+    pitch_[2] = d_hat[1];
+  }
 
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
-  msg.force = f_out;
-  msg.moment = {M_out[0], -M_out[1], -M_out[2]};
+  msg.force = f_out_geom;
+  msg.moment = {M_out_pub[0], -M_out_pub[1], -M_out_pub[2]};
+  msg.com_bias = {Pc_hat_[0], -Pc_hat_[1], -Pc_hat_[2]};
   controller_publisher_->publish(msg);
-
-  // Vector3 X = Vector3::Zero();
-  // fdcl_controller_.output_debug(X);
-  // RCLCPP_INFO(this->get_logger(),
-  //             "[x=%.6f, y=%.6f, z=%.6f]",
-  //             X(0), X(1), X(2));
 }
 
 void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {
@@ -115,6 +136,23 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   command_->b1d << std::cos(ref_[3]), std::sin(ref_[3]), 0.0;
   command_->b1d_dot.setZero();
   command_->b1d_ddot.setZero();
+
+  if      (sbus_chnl_[6]==352){estimator_state_ = 0;}  // conventional
+  else if(sbus_chnl_[6]==1024){estimator_state_ = 1;}  // dob
+  else if(sbus_chnl_[6]==1696){estimator_state_ = 2;}  // com
+
+  if(estimator_state_ != prev_estimator_state_){
+    prev_estimator_state_ = estimator_state_;
+    prev_d_hat_ = Eigen::Vector3d::Zero();
+    prev_Omega_ = Eigen::Vector3d::Zero();
+    filtered_Omega_dot_ = Eigen::Vector3d::Zero();
+    filtered_Omega_dot_star_tilde_ = Eigen::Vector3d::Zero();
+    filtered_A_hat_ = Eigen::Matrix3d::Zero();
+    Pc_hat_ = Eigen::Vector3d::Zero();
+    if     (estimator_state_==0){RCLCPP_INFO(this->get_logger(), "control mode -> [Conventional]");}
+    else if(estimator_state_==1){RCLCPP_INFO(this->get_logger(), "control mode -> [DOB]");}
+    else if(estimator_state_==2){RCLCPP_INFO(this->get_logger(), "control mode -> [CoM estimating]");}
+  }
 }
 
 void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg) {
@@ -220,10 +258,10 @@ void ControllerNode::debugging_timer_callback() {
   gui_msg.pos_cmd[2] = -ref_[2]; // z
   gui_msg.pos_cmd[3] = -ref_[3]; // yaw
 
-  gui_msg.wrench_des[0] = f_out;
-  gui_msg.wrench_des[1] = M_out[0];
-  gui_msg.wrench_des[2] = -M_out[1];
-  gui_msg.wrench_des[3] = -M_out[2];
+  gui_msg.wrench_des[0] = f_out_geom;
+  gui_msg.wrench_des[1] = M_out_pub[0];
+  gui_msg.wrench_des[2] = -M_out_pub[1];
+  gui_msg.wrench_des[3] = -M_out_pub[2];
   
   for (int i = 0; i < 3; i++) {
     gui_msg.imu_roll[i]  = roll_[i];

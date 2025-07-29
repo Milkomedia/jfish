@@ -26,14 +26,9 @@ using Eigen::MatrixXd;
 #define A5 0.64 // Arm length [m]
 #define A_B 0.06 // Arm length between {B} and {0} [m]
 
-#define zeta  0.21496 // b/k Constant 1.5958e-8
-
-#define xc 0.00 // Center of Mass position [m]
-#define yc 0.00 // Center of Mass position [m]
-#define zc 0.00 // Center of Mass position [m]
-
 #define pwm_alpha_ 46.5435  // F = a * pwm^2 + b
 #define pwm_beta_ 8.6111    // F = a * pwm^2 + b
+#define zeta  0.21496 // b/k Constant 1.5958e-8
 
 class AllocatorWorker : public rclcpp::Node {
 public:
@@ -88,7 +83,7 @@ private:
   Vector4d W1 = Vector4d::Zero();   // PID-control result [N.m N.m N.m N]
   Vector4d f = Vector4d::Zero();    // Allocated result [N N N N]
   Vector4d pwm = Vector4d::Zero();  // Allocated result [pwm pwm pwm pwm]
-  Vector3d CoM = Vector3d::Zero();  // Center of Mass position [xc yc zc]
+  Vector3d CoM = Vector3d::Zero();  // Center of Mass position [m m m]
   
   Matrix4d Transformation_a1 = Matrix4d::Identity();
   Matrix4d Transformation_a2 = Matrix4d::Identity();

@@ -11,8 +11,6 @@ AllocatorWorker::AllocatorWorker() : Node("allocator_node")
       A3,   0,       0, 0,    // 2 -> 3
       A4,   M_PI/2,  0, 0,    // 3 -> 4
       A5,   0,       0, 0;    // 4 -> 5
-  
-  CoM << xc, yc, zc;
 
   // Subscriber
   controller_subscriber_ = this->create_subscription<controller_interfaces::msg::ControllerOutput>("controller_output", 1, std::bind(&AllocatorWorker::controllerCallback, this, std::placeholders::_1));
@@ -52,7 +50,8 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   filtered_frequency_ = 1.0 / avg_dt;
 
   // get [Mx My Mz F]
-  W1 << msg->moment[0], msg->moment[1], msg->moment[2], msg->force; 
+  W1 << msg->moment[0], msg->moment[1], msg->moment[2], msg->force;
+  CoM << msg->com_bias[0], msg->com_bias[1], msg->com_bias[2]; 
   // get Wrench_1={B} frame [Tau_rall Tau_pitch Tau_yaw Fz]^T --> Under-actuated system Allocation part
   
   for (int arm_number = 1; arm_number <= 4; arm_number++) 

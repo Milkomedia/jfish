@@ -23,7 +23,7 @@
 #include <iomanip>
 ///////////////////////////////////////////////
 
-#define Loop_us 500 // controller thread loop dt [us]
+#define Loop_us 2500 // controller thread loop dt [us]
 
 #define CMD_XY_MAX 1.5     // pos cmd range mapped to [-k, k]m (x,y)
 #define CMD_Z_MAX  1.5     // pos cmd range mapped to [ 0, k]m (z)
@@ -52,8 +52,8 @@ private:
 
   fdcl::control fdcl_controller_;
 
-  double f_out;
-  Vector3 M_out;
+  double f_out_geom;
+  Vector3 M_out_geom;
 
   void sbusCallback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg);
@@ -63,8 +63,6 @@ private:
   void heartbeat_timer_callback();
   void debugging_timer_callback();
   void controller_loop();
-
-  bool define_initial_yaw();
 
   rclcpp::Subscription<sbus_interfaces::msg::SbusSignal>::SharedPtr sbus_subscription_;
   rclcpp::Subscription<mocap_interfaces::msg::MocapMeasured>::SharedPtr optitrack_mea_subscription_;
@@ -79,18 +77,29 @@ private:
   rclcpp::Publisher<controller_interfaces::msg::ControllerDebugVal>::SharedPtr debug_val_publisher_;
   rclcpp::TimerBase::SharedPtr debugging_timer_;
 
-  /////
+  uint8_t estimator_state_ = 0; // 0->conventional / 1->dob / 2->com
+  uint8_t prev_estimator_state_ = 0;
 
-  // init timer
-  rclcpp::TimerBase::SharedPtr init_timer_;
+  // DOB state
+  const double k_bar_ = 1.0;
+  Eigen::Vector3d prev_d_hat_ = Eigen::Vector3d::Zero();
+  
+  Eigen::Vector3d prev_Omega_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d filtered_Omega_dot_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d filtered_Omega_dot_star_tilde_ = Eigen::Vector3d::Zero();
+  const double Qfilter_Alpha_ = 0.999;
+  const double Qfilter_Beta_ = 1.0 - Qfilter_Alpha_;
+  const double Qfilter_dt_ = Loop_us / 1000000.0; // [sec]
 
-  // flag for initial yaw
-  bool initial_yaw_done_{false};
+  // CoM estimate state
+  const double m_bar_ = 4.7; // this must be same in controller_param.h
+  const double g_ = 9.80665; // [m/s^2]
+  const Eigen::Vector3d e_3_ = Eigen::Vector3d(0.0, 0.0, 1.0);
+  const double gamma_ = 0.000001;
+  Eigen::Matrix3d filtered_A_hat_ = Eigen::Matrix3d::Zero();
+  Eigen::Vector3d Pc_hat_ = Eigen::Vector3d::Zero();
 
-  // callback
-  void init_timer_callback();
-
-  /////
+  Eigen::Vector3d M_out_pub = Eigen::Vector3d::Zero();
 
   // sbus state
   int   sbus_chnl_[9] = {1024, 1024, 352, 1024, 352, 352, 352, 352, 352};
