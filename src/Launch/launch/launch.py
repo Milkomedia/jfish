@@ -37,19 +37,6 @@ def generate_launch_description():
 
     mode = LaunchConfiguration('mode')
 
-    # microstrain launch
-    microstrain_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('microstrain_inertial_driver'),
-                'launch',
-                'microstrain_launch.py'
-            )
-        ),
-        launch_arguments={'mode': mode}.items(),
-        condition=IfCondition(PythonExpression(["'", mode, "' == 'real'"])),
-    )
-
     nodes = [
         # IMU Node
         Node(
@@ -163,7 +150,6 @@ def generate_launch_description():
     return LaunchDescription([
         mode_arg,
         OpaqueFunction(function=validate_mode),
-        microstrain_launch,
         *nodes,
         on_start_info,
         shutdown_handler,
