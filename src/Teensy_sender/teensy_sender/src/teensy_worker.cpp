@@ -83,7 +83,7 @@ void TeensyNode::CAN_transmit() {
 
 /* for sim */
 void TeensyNode::allocatorCallback_MUJ_send(const allocator_interfaces::msg::PwmVal::SharedPtr msg) {
-  // first, apply 3ms time-delay
+  // first, apply 1ms time-delay
   rclcpp::Time now_time = this->now();
 
   // Push the new data into the buffer
@@ -92,9 +92,9 @@ void TeensyNode::allocatorCallback_MUJ_send(const allocator_interfaces::msg::Pwm
   new_data.pwm_val[0] = msg->pwm1; new_data.pwm_val[1] = msg->pwm2; new_data.pwm_val[2] = msg->pwm3; new_data.pwm_val[3] = msg->pwm4;
   data_buffer_.push_back(new_data);
 
-  // Remove older data that is no longer needed to reduce memory usage (older than 10ms)
+  // Remove older data that is no longer needed to reduce memory usage (older than 3ms)
   while (!data_buffer_.empty()) {
-    if ((now_time - data_buffer_.front().stamp).nanoseconds() > 10000000LL) {
+    if ((now_time - data_buffer_.front().stamp).nanoseconds() > 3000000LL) {
       data_buffer_.pop_front();
     }
     else { break; }
@@ -123,35 +123,21 @@ void TeensyNode::allocatorCallback_MUJ_send(const allocator_interfaces::msg::Pwm
   pwm3_ = LPF_alpha_ * delayed_data.pwm_val[2] + LPF_beta_ * pwm3_;
   pwm4_ = LPF_alpha_ * delayed_data.pwm_val[3] + LPF_beta_ * pwm4_;
 
-  // 1. PWM to RPM
+  // 1. PWM to Thrust
   auto compute_rpm = [&](double pwm) -> double {
-    return K1_ * std::pow(pwm, n_pwm_) + b_;
+    return PWM_alpha_*pwm*pwm + PWM_beta_;
   };
 
-  rpm1_ = compute_rpm(pwm1_);
-  rpm2_ = compute_rpm(pwm2_);
-  rpm3_ = compute_rpm(pwm3_);
-  rpm4_ = compute_rpm(pwm4_);
+  f1_ = compute_rpm(pwm1_);
+  f2_ = compute_rpm(pwm2_);
+  f3_ = compute_rpm(pwm3_);
+  f4_ = compute_rpm(pwm4_);
 
-  // 2. RPM to Thrust
-  auto compute_thrust = [&](double omega) -> double {
-    return C_T_ * std::pow(omega, n_thrust_);
-  };
-
-  f1_ = compute_thrust(rpm1_);
-  f2_ = compute_thrust(rpm2_);
-  f3_ = compute_thrust(rpm3_);
-  f4_ = compute_thrust(rpm4_);
-
-  // 3. RPM to Torque
-  auto compute_torque = [&](double omega) -> double {
-    return C1_tau_ * omega * omega + C2_tau_ * omega + C3_tau_;
-  };
-
-  m1_ = compute_torque(rpm1_);
-  m2_ = -compute_torque(rpm2_);
-  m3_ = compute_torque(rpm3_);
-  m4_ = -compute_torque(rpm4_);
+  // 2. Thrust to Torque
+  m1_ = PWM_zeta_*f1_;
+  m2_ = -PWM_zeta_*f2_;
+  m3_ = PWM_zeta_*f3_;
+  m4_ = -PWM_zeta_*f4_;
 
   // RCLCPP_INFO(this->get_logger(), "[f1: %.2f, f2: %.2f, f3: %.2f, f4: %.2f]", f1_, f2_, f3_, f4_);
   

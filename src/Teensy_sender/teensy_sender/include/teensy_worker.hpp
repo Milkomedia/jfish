@@ -61,48 +61,6 @@ private:
   int sock_ = 0;              // SocketCAN socket file descriptor.
   struct sockaddr_can addr_;  // CAN interface address structure.
 
-  // Coefficients for conversions
-  const double LPF_alpha_ = 0.01; // Low-pass filter coefficient (0 < alpha_ < 1)
-  const double LPF_beta_ = 1.0 - LPF_alpha_; // Low-pass filter coefficient
-  const double K1_ = 8568.19;
-  const double b_ = 331.7;
-  const double n_pwm_ = 0.67;
-  const double C_T_ = 2.5 / 1000000.0;
-  const double n_thrust_ = 1.8555;
-  const double C1_tau_ = 1.5958 / 100000000.0;
-  const double C2_tau_ = 0.0;
-  const double C3_tau_ = 0.0;
-
-  // Buffer (FIFO) to store data for delayed output
-  std::deque<DelayedData> data_buffer_;
-
-  // Duration representing 3ms delay (3,000,000ns)
-  rclcpp::Duration delay_{0, 1000000};
-
-  // Latest PWM values
-  double pwm1_ = 0.0; // [0, 1]
-  double pwm2_ = 0.0; // [0, 1]
-  double pwm3_ = 0.0; // [0, 1]
-  double pwm4_ = 0.0; // [0, 1]
-
-  // Latest RPM values
-  double rpm1_ = 0.0; // [rpm]
-  double rpm2_ = 0.0; // [rpm]
-  double rpm3_ = 0.0; // [rpm]
-  double rpm4_ = 0.0; // [rpm]
-  
-  // Latest Force values
-  double f1_ = 0.0; // [N]
-  double f2_ = 0.0; // [N]
-  double f3_ = 0.0; // [N]
-  double f4_ = 0.0; // [N]
-
-  // Latest Moment values
-  double m1_ = 0.0; // [Nm]
-  double m2_ = 0.0; // [Nm]
-  double m3_ = 0.0; // [Nm]
-  double m4_ = 0.0; // [Nm]
-
   // Precomputed CAN frame for zero PWM (mapped to 16383 -> 0x3FFF)
   // High byte = 63 (0x3F), Low byte = 255 (0xFF)
   inline static constexpr struct can_frame frame_zeros_ = {
@@ -122,6 +80,39 @@ private:
   // Latest PWM values (stored by callback, sent by timer)
   struct can_frame pending_frame_ = frame_zeros_;
   std::mutex frame_mutex_;
+
+  // --- MuJoCo Motor Model --- //
+
+  // Coefficients for conversions
+  const double LPF_alpha_ = 0.01; // Low-pass filter coefficient (0 < alpha_ < 1)
+  const double LPF_beta_ = 1.0 - LPF_alpha_; // Low-pass filter coefficient
+  const double PWM_alpha_ = 70.;
+  const double PWM_beta_ = 8.;
+  const double PWM_zeta_ = 0.03;
+
+  // Buffer (FIFO) to store data for delayed output
+  std::deque<DelayedData> data_buffer_;
+
+  // Duration representing 1ms delay (1,000,000ns)
+  rclcpp::Duration delay_{0, 1000000};
+
+  // Latest PWM values
+  double pwm1_ = 0.0; // [0, 1]
+  double pwm2_ = 0.0; // [0, 1]
+  double pwm3_ = 0.0; // [0, 1]
+  double pwm4_ = 0.0; // [0, 1]
+  
+  // Latest Force values
+  double f1_ = 0.0; // [N]
+  double f2_ = 0.0; // [N]
+  double f3_ = 0.0; // [N]
+  double f4_ = 0.0; // [N]
+
+  // Latest Moment values
+  double m1_ = 0.0; // [Nm]
+  double m2_ = 0.0; // [Nm]
+  double m3_ = 0.0; // [Nm]
+  double m4_ = 0.0; // [Nm]
 
   // Watchdog state
   uint16_t can_err_cnt = 0;

@@ -157,6 +157,11 @@
         </body>
       </body>
     </body>
+    <body name="weight" pos="0.3 0.0 0.0">
+      <joint name="rotor_joint" pos="-0.3 0 0" axis="0 0 1"/>
+      <inertial pos="0 0 0" mass="0.3" diaginertia="3.2e-05 3.2e-05 3.2e-05"/>
+      <geom name="weight_geom" type="sphere" size="0.02" rgba="1 0 0 1" contype="0" conaffinity="0"/>
+    </body>
   </body>
   </worldbody>
   
@@ -166,10 +171,10 @@
     <motor class="BLDC" name="thrust2" site="thrust2" gear="1 0 0 0 0 0" ctrlrange="0 50"/>
     <motor class="BLDC" name="thrust3" site="thrust3" gear="1 0 0 0 0 0" ctrlrange="0 50"/>
     <motor class="BLDC" name="thrust4" site="thrust4" gear="1 0 0 0 0 0" ctrlrange="0 50"/>
-    <motor class="BLDC" name="torque1" site="torque1" gear="0 0 0 1 0 0" ctrlrange="-1.5 1.5"/>
-    <motor class="BLDC" name="torque2" site="torque2" gear="0 0 0 1 0 0" ctrlrange="-1.5 1.5"/>
-    <motor class="BLDC" name="torque3" site="torque3" gear="0 0 0 1 0 0" ctrlrange="-1.5 1.5"/>
-    <motor class="BLDC" name="torque4" site="torque4" gear="0 0 0 1 0 0" ctrlrange="-1.5 1.5"/>
+    <motor class="BLDC" name="torque1" site="torque1" gear="0 0 0 1 0 0" ctrlrange="-3.0 3.0"/>
+    <motor class="BLDC" name="torque2" site="torque2" gear="0 0 0 1 0 0" ctrlrange="-3.0 3.0"/>
+    <motor class="BLDC" name="torque3" site="torque3" gear="0 0 0 1 0 0" ctrlrange="-3.0 3.0"/>
+    <motor class="BLDC" name="torque4" site="torque4" gear="0 0 0 1 0 0" ctrlrange="-3.0 3.0"/>
     <!-- Arm1 -->
     <position name="servo_Arm1_joint1" joint="Arm1_joint1" kp="50" kv="0.1" ctrlrange="-2.00713 2.00713"/>
     <position name="servo_Arm1_joint2" joint="Arm1_joint2" kp="50" kv="0.1"  ctrlrange="-2.00713 2.00713"/>
@@ -194,6 +199,8 @@
     <position name="servo_Arm4_joint3" joint="Arm4_joint3" kp="50" kv="0.1" ctrlrange="-2.00713 2.00713"/>
     <position name="servo_Arm4_joint4" joint="Arm4_joint4" kp="50" kv="0.1" ctrlrange="-1.13446 -3.14159"/>
     <position name="servo_Arm4_joint5" joint="Arm4_joint5" kp="50" kv="0.1" ctrlrange="-1.74533 1.74533"/>
+
+    <velocity name="servo_weight_vel" joint="rotor_joint" kv="1.0" ctrlrange="-10 10"/>
   </actuator>
 
     <sensor>

@@ -28,15 +28,15 @@ ControllerNode::ControllerNode()
   command_->xd << 0.0, 0.0, 0.0;  // I don't know why,,, but
   command_->b1d << 1.0, 0.0, 0.0; // without this init, drone crashes.
 
-  rclcpp::executors::SingleThreadedExecutor exec;
-  exec.add_node(shared_from_this());
+  // rclcpp::executors::SingleThreadedExecutor exec;
+  // exec.add_node(shared_from_this());
 
-  while (rclcpp::ok() && !define_initial_yaw()) {
-    exec.spin_some();                                          // 콜백 처리
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
+  // while (rclcpp::ok() && !define_initial_yaw()) {
+  //   exec.spin_some();                                          // 콜백 처리
+  //   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  // }
 
-  RCLCPP_INFO(this->get_logger(), "INIT YAW %f", inital_yaw_bias_);
+  // RCLCPP_INFO(this->get_logger(), "INIT YAW %f", inital_yaw_bias_);
 
   // main-tasking thread
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
@@ -44,8 +44,6 @@ ControllerNode::ControllerNode()
   // initial handshake: immediately send 42 and enable subsequent heartbeat
   hb_state_   = 42;
   hb_enabled_ = true;
-
-  last_r_log_time_ = this->now();
 }
 
 bool ControllerNode::define_initial_yaw() {
@@ -161,24 +159,24 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   
   state_->R = R_yaw_bias_ * R;
 
-  // Throttle printing at 10 Hz
-  static rclcpp::Time last_print_time = this->now();
-  auto now = this->now();
-  // 100 ms 이상 경과했을 때만 출력
-  if ((now - last_print_time).nanoseconds() > static_cast<int64_t>(100e6)) {
-    last_print_time = now;
+  // // Throttle printing at 10 Hz
+  // static rclcpp::Time last_print_time = this->now();
+  // auto now = this->now();
+  // // 100 ms 이상 경과했을 때만 출력
+  // if ((now - last_print_time).nanoseconds() > static_cast<int64_t>(100e6)) {
+  //   last_print_time = now;
 
-    // Format R matrix with fixed-point, 2 decimals
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2);
-    oss << "Rotation matrix R:\n"
-        << "[" << state_->R(0,0) << " " << state_->R(0,1) << " " << state_->R(0,2) << "]\n"
-        << "[" << state_->R(1,0) << " " << state_->R(1,1) << " " << state_->R(1,2) << "]\n"
-        << "[" << state_->R(2,0) << " " << state_->R(2,1) << " " << state_->R(2,2) << "]";
+  //   // Format R matrix with fixed-point, 2 decimals
+  //   std::ostringstream oss;
+  //   oss << std::fixed << std::setprecision(2);
+  //   oss << "Rotation matrix R:\n"
+  //       << "[" << state_->R(0,0) << " " << state_->R(0,1) << " " << state_->R(0,2) << "]\n"
+  //       << "[" << state_->R(1,0) << " " << state_->R(1,1) << " " << state_->R(1,2) << "]\n"
+  //       << "[" << state_->R(2,0) << " " << state_->R(2,1) << " " << state_->R(2,2) << "]";
 
-    // Print via ROS2_INFO
-    RCLCPP_INFO(this->get_logger(), "\n%s", oss.str().c_str());
-  }
+  //   // Print via ROS2_INFO
+  //   RCLCPP_INFO(this->get_logger(), "\n%s", oss.str().c_str());
+  // }
 
   // gyro (copy to controller-state && gui-sending variable)
   state_->W << msg->w[0], -msg->w[1], -msg->w[2];

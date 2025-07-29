@@ -44,8 +44,6 @@ public:
   ~ControllerNode();
 
 private:
-  rclcpp::Time last_r_log_time_;
-
   fdcl::state_t * state_;
   fdcl::command_t * command_;
 
@@ -99,13 +97,13 @@ private:
   double ref_[4] = {0.0, 0.0, 0.0, 0.0}; // x,y,z,yaw cmd [m, m, m, rad]
   double roll_[3] =  {0.0, 0.0, 0.0}; // imu r [rad, rad/s, rad/s^2]
   double pitch_[3] = {0.0, 0.0, 0.0}; // imu p [rad, rad/s, rad/s^2]
-  double yaw_[3] =   {-0.12321, 0.0, 0.0}; // imu y [rad, rad/s, rad/s^2]
+  double yaw_[3] =   {0.0, 0.0, 0.0}; // imu y [rad, rad/s, rad/s^2]
   double x_[3] = {0.0, 0.0, 0.0}; // opti x [m, m/s, m/s^2]
   double y_[3] = {0.0, 0.0, 0.0}; // opti y [m, m/s, m/s^2]
   double z_[3] = {0.0, 0.0, 0.0}; // opti z [m, m/s, m/s^2]
 
   double inital_yaw_bias_ = 0.0;
-  Eigen::Matrix3d R_yaw_bias_;
+  Eigen::Matrix3d R_yaw_bias_ = Eigen::Matrix3d::Identity();
 
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value

@@ -34,6 +34,43 @@ struct UAVParameters {
 inline ControlParameters getControlParameters() {
   ControlParameters param;
   param.use_decoupled_yaw = true;
+  param.kX << 10.0, 10.0, 3.0;
+  param.kV << 9.0, 9.0, 12.0;
+  param.kR << 4.0, 4.0, 2.0;
+  param.kW << 3, 3, 3;
+  return param;
+}
+
+inline IntegralParameters getIntegralParameters() {
+  IntegralParameters param;
+  param.kIX = 0.0;
+  param.ki = 0.0;
+  param.kIR = 0.0;
+  param.kI = 0.0;
+  param.kyI = 0.0;
+  param.c1 = 0.0;
+  param.c2 = 0.0;
+  param.c3 = 0.0;
+  return param;
+}
+
+inline UAVParameters getUAVParameters() {
+  UAVParameters param;
+  param.m = 4.7;
+  param.g = 9.80665;
+  return param;
+}
+
+}
+
+#endif // CONTROLLER_PARAM_H
+
+/*
+last experiment gain
+
+inline ControlParameters getControlParameters() {
+  ControlParameters param;
+  param.use_decoupled_yaw = true;
   param.kX << 0.0, 0.0, 20.0;
   param.kV << 0.0, 0.0, 0.0;
   param.kR << 27.0, 27.0, 3.0;
@@ -57,43 +94,6 @@ inline IntegralParameters getIntegralParameters() {
 inline UAVParameters getUAVParameters() {
   UAVParameters param;
   param.m = 8.0; 
-  param.g = 9.80665;
-  return param;
-}
-
-}
-
-#endif // CONTROLLER_PARAM_H
-
-/*
-sim gain
-
-inline ControlParameters getControlParameters() {
-  ControlParameters param;
-  param.use_decoupled_yaw = true;
-  param.kX << 20.0, 20.0, 10.0;
-  param.kV << 9.0, 9.0, 10.0;
-  param.kR << 5.0, 5.0, 2.0;
-  param.kW << 4, 4, 4;
-  return param;
-}
-
-inline IntegralParameters getIntegralParameters() {
-  IntegralParameters param;
-  param.kIX = 3.0;
-  param.ki = 0.1;
-  param.kIR = 0.15;
-  param.kI = 0.01;
-  param.kyI = 0.05;
-  param.c1 = 1.0; //
-  param.c2 = 1.0;
-  param.c3 = 1.0;
-  return param;
-}
-
-inline UAVParameters getUAVParameters() {
-  UAVParameters param;
-  param.m = 4.751729; 
   param.g = 9.80665;
   return param;
 }
