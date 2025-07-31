@@ -112,6 +112,7 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   sbus_chnl_[6] = msg->ch[7];  // toggle G
   sbus_chnl_[7] = msg->ch[10]; // left-dial
   sbus_chnl_[8] = msg->ch[11]; // right-dial
+  sbus_chnl_[9] = msg->ch[5];  // paddle
   
   // remap SBUS data to double <pos x,y,z in [m]>
   ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
@@ -140,6 +141,28 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   if      (sbus_chnl_[6]==352){estimator_state_ = 0;}  // conventional
   else if(sbus_chnl_[6]==1024){estimator_state_ = 1;}  // dob
   else if(sbus_chnl_[6]==1696){estimator_state_ = 2;}  // com
+
+  if      (sbus_chnl_[9]==352){ // paddle normal
+    if     (prev_paddle_state_ == 0){paddle_holding_cnt_ = 0;}
+    else if(prev_paddle_state_ == 1){
+      if     (paddle_holding_cnt_ <= minimum_holding_time_){paddle_holding_cnt_ = 0;}
+      else if(paddle_holding_cnt_ >= maximum_holding_time_){paddle_holding_cnt_ = 0;}
+      else   {
+        is_paused_ =  !is_paused_;
+        if(is_paused_){RCLCPP_INFO(this->get_logger(), "-- [ PAUSED ] --");}
+        else          {RCLCPP_INFO(this->get_logger(), "-- [ RESUME ] --");}
+      }
+    }
+    prev_paddle_state_ = 0;
+  }
+  else if(sbus_chnl_[9]==1696){ // paddle pushed
+    if     (prev_paddle_state_ == 0){paddle_holding_cnt_ = 1;}
+    else if(prev_paddle_state_ == 1){
+      if(paddle_holding_cnt_ >= maximum_holding_time_){paddle_holding_cnt_ = maximum_holding_time_;}
+      else{paddle_holding_cnt_ += 1;}
+    }
+    prev_paddle_state_ = 1;
+  }
 
   if(estimator_state_ != prev_estimator_state_){
     prev_estimator_state_ = estimator_state_;

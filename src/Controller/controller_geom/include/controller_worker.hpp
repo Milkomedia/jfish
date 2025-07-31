@@ -77,6 +77,12 @@ private:
   rclcpp::Publisher<controller_interfaces::msg::ControllerDebugVal>::SharedPtr debug_val_publisher_;
   rclcpp::TimerBase::SharedPtr debugging_timer_;
 
+  bool is_paused_ = true; // false->resume(flight-available) / true->pause
+  uint8_t prev_paddle_state_ = 0; // 0->paddle normal / 1->paddle pushed
+  uint8_t paddle_holding_cnt_ = 0;
+  const uint8_t minimum_holding_time_ = 4;
+  const uint8_t maximum_holding_time_ = 200;
+
   uint8_t estimator_state_ = 0; // 0->conventional / 1->dob / 2->com
   uint8_t prev_estimator_state_ = 0;
 
@@ -102,7 +108,7 @@ private:
   Eigen::Vector3d M_out_pub = Eigen::Vector3d::Zero();
 
   // sbus state
-  int   sbus_chnl_[9] = {1024, 1024, 352, 1024, 352, 352, 352, 352, 352};
+  int   sbus_chnl_[10] = {1024, 1024, 352, 1024, 352, 352, 352, 352, 352, 352};
   double ref_[4] = {0.0, 0.0, 0.0, 0.0}; // x,y,z,yaw cmd [m, m, m, rad]
   double roll_[3] =  {0.0, 0.0, 0.0}; // imu r [rad, rad/s, rad/s^2]
   double pitch_[3] = {0.0, 0.0, 0.0}; // imu p [rad, rad/s, rad/s^2]
