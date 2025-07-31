@@ -93,6 +93,14 @@ void ControllerNode::controller_timer_callback() {
     pitch_[2] = d_hat[1];
   }
 
+  M_out_pub = M_out_geom; //  Do Not apply dob or comestimating (yet)
+
+  if (is_paused_){overriding_coeff_ -= turnoff_coeff_;} // pause
+  else           {overriding_coeff_ += turnon_coeff_;} // resume
+  overriding_coeff_ = std::clamp(overriding_coeff_, 0.0, 1.0);
+  M_out_pub = overriding_coeff_ * M_out_pub;
+  f_out_geom = overriding_coeff_ * f_out_geom;
+
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
   msg.force = f_out_geom;

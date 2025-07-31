@@ -82,6 +82,9 @@ private:
   uint8_t paddle_holding_cnt_ = 0;
   const uint8_t minimum_holding_time_ = 4;
   const uint8_t maximum_holding_time_ = 200;
+  double overriding_coeff_ = 0.; // this must be in [0,1]
+  const double turnon_coeff_  = Loop_us / 1000000. / 4.; // 4sec delay to resume
+  const double turnoff_coeff_ = Loop_us / 1000000. / 5.; // 5sec delay to pause
 
   uint8_t estimator_state_ = 0; // 0->conventional / 1->dob / 2->com
   uint8_t prev_estimator_state_ = 0;
