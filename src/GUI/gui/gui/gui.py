@@ -115,11 +115,12 @@ class DebugGUI(QWidget):
         self.sbus_kill = None # KILL
 
         sbus_group = QGroupBox("SBUS")
+        sbus_group.setFixedSize(310, 180)
         sbus_layout = QHBoxLayout()
 
         # Channel display
         sbus_cmds_layout = QVBoxLayout()
-        sbus_cmds = ["  cmd_x ", "  cmd_y ", "  cmd_z ", "  cmd_ψ"]
+        sbus_cmds = [" x ", " y ", " z ", " ψ"]
         for sbus_cmd in sbus_cmds:  # Channels 1~4
             sbus_cmd_layout = QHBoxLayout()
             cmd_label = QLabel(sbus_cmd)
@@ -128,11 +129,11 @@ class DebugGUI(QWidget):
             cmd_val = QLineEdit()
             cmd_val.setText("  ?")
             cmd_val.setReadOnly(True)
-            cmd_val.setFixedWidth(100)
+            cmd_val.setFixedWidth(70)
             sbus_cmd_layout.addWidget(cmd_val)
             self.cmd_vals.append(cmd_val)
 
-            cmd_label = QLabel("° ") if sbus_cmd == "  cmd_ψ" else QLabel("m     ")
+            cmd_label = QLabel("° ") if sbus_cmd == " ψ" else QLabel("m   ")
             sbus_cmd_layout.addWidget(cmd_label)
 
             sbus_cmds_layout.addLayout(sbus_cmd_layout)
@@ -148,6 +149,7 @@ class DebugGUI(QWidget):
             dial_hbox.addWidget(dial_label)
 
             dial_bar = QProgressBar()
+            dial_bar.setFixedWidth(60)
             dial_bar.setRange(0, 100)
             dial_bar.setValue(0)
             dial_hbox.addWidget(dial_bar)
@@ -156,7 +158,7 @@ class DebugGUI(QWidget):
             dial_val = QLineEdit()
             dial_val.setText("  ?")
             dial_val.setReadOnly(True)
-            dial_val.setFixedWidth(80)
+            dial_val.setFixedWidth(30)
             dial_hbox.addWidget(dial_val)
             self.sbus_dials_label.append(dial_val)
 
@@ -172,7 +174,7 @@ class DebugGUI(QWidget):
             stick_val = QLineEdit()
             stick_val.setText(" ?")
             stick_val.setReadOnly(True)
-            stick_val.setFixedWidth(60)
+            stick_val.setFixedWidth(15)
             stick_hbox.addWidget(stick_val)
             self.sbus_toggles.append(stick_val)
 
@@ -200,6 +202,7 @@ class DebugGUI(QWidget):
         self.fc_wrench_label = []
         
         geom_group = QGroupBox("FC")
+        geom_group.setFixedSize(390, 180)
         geom_layout = QVBoxLayout()
 
         wrench_labels = [" F ", "Mx", "My", "Mz"]
@@ -211,14 +214,14 @@ class DebugGUI(QWidget):
             wrench_bar = QProgressBar()
             wrench_bar.setRange(0, 1000)
             wrench_bar.setValue(0)
-            wrench_bar.setFixedWidth(350)
+            wrench_bar.setFixedWidth(200)
             label_layout.addWidget(wrench_bar)
             self.fc_wrench_bar.append(wrench_bar)
 
             wrench_val = QLineEdit()
             wrench_val.setText("    ?")
             wrench_val.setReadOnly(True)
-            wrench_val.setFixedWidth(100)
+            wrench_val.setFixedWidth(60)
             label_layout.addWidget(wrench_val)
             self.fc_wrench_label.append(wrench_val)
 
@@ -234,12 +237,13 @@ class DebugGUI(QWidget):
         self.node_states = []
 
         nodestate_group_box = QGroupBox("Control Hz")
+        nodestate_group_box.setFixedSize(120, 180)
         joint_layout = QVBoxLayout()
 
         nodes = [" Allocator", "MuJoCo"]
         for node in nodes:
             q_label = QLabel(node)
-            q_label.setFixedHeight(60)
+            q_label.setFixedHeight(50)
             joint_layout.addWidget(q_label)
 
             row_layout = QHBoxLayout()
@@ -247,8 +251,8 @@ class DebugGUI(QWidget):
             value_label = QLineEdit()
             value_label.setText("0")
             value_label.setReadOnly(True)
-            value_label.setFixedWidth(90)
-            value_label.setFixedHeight(45)
+            value_label.setFixedWidth(50)
+            value_label.setFixedHeight(20)
             self.node_states.append(value_label)
             dummy = QLabel()
             dummy.setFixedWidth(1)
@@ -269,6 +273,7 @@ class DebugGUI(QWidget):
         self.thrusters_bar = []
         self.thrusters_label = []
         thruster_group_box = QGroupBox("Thrusters")
+        thruster_group_box.setFixedSize(220, 180)
         thruster_layout = QVBoxLayout()
 
         motors = ["f1", "f2", "f3", "f4"]
@@ -286,12 +291,12 @@ class DebugGUI(QWidget):
             motor_val = QLineEdit()
             motor_val.setText("  ?")
             motor_val.setReadOnly(True)
-            motor_val.setFixedWidth(100)
+            motor_val.setFixedWidth(60)
             motor_layout.addWidget(motor_val)
             self.thrusters_label.append(motor_val)
 
             unit_label = QLabel("N")
-            unit_label.setFixedWidth(30)
+            unit_label.setFixedWidth(20)
             motor_layout.addWidget(unit_label)
 
             thruster_layout.addLayout(motor_layout)
@@ -313,6 +318,7 @@ class DebugGUI(QWidget):
         self.imu_meas = []
 
         imu_group_box = QGroupBox("IMU")
+        imu_group_box.setFixedSize(290, 180)
         imu_group_layout = QVBoxLayout()
 
         imu_label_layout = QHBoxLayout()
@@ -321,7 +327,7 @@ class DebugGUI(QWidget):
         imu_labels = ["deg", "deg/s", "deg/s^2"]
         for label in imu_labels:
             rpy_label = QLabel(label)
-            rpy_label.setFixedHeight(35)
+            rpy_label.setFixedHeight(25)
             imu_label_layout.addWidget(rpy_label)
         imu_group_layout.addLayout(imu_label_layout)
 
@@ -329,7 +335,7 @@ class DebugGUI(QWidget):
         for header in imu_headers:
             header_layout = QHBoxLayout()
             header_label = QLabel(header)
-            header_label.setFixedWidth(70)
+            header_label.setFixedWidth(40)
             header_layout.addWidget(header_label)
 
             imu_mea= []
@@ -337,7 +343,7 @@ class DebugGUI(QWidget):
                 value_label = QLineEdit()
                 value_label.setText("  ?")
                 value_label.setReadOnly(True)
-                value_label.setFixedWidth(120)
+                value_label.setFixedWidth(70)
                 header_layout.addWidget(value_label)
 
                 imu_mea.append(value_label)
@@ -352,6 +358,7 @@ class DebugGUI(QWidget):
         self.opti_meas = []
 
         opti_group_box = QGroupBox("Opti")
+        opti_group_box.setFixedSize(290, 180)
         opti_group_layout = QVBoxLayout()
 
         opti_label_layout = QHBoxLayout()
@@ -368,7 +375,7 @@ class DebugGUI(QWidget):
         for header in opti_headers:
             header_layout = QHBoxLayout()
             header_label = QLabel(header)
-            header_label.setFixedWidth(50)
+            header_label.setFixedWidth(40)
             header_layout.addWidget(header_label)
 
             opti_mea = []
@@ -376,7 +383,7 @@ class DebugGUI(QWidget):
                 value_label = QLineEdit()
                 value_label.setText("  ?")
                 value_label.setReadOnly(True)
-                value_label.setFixedWidth(120)
+                value_label.setFixedWidth(70)
                 header_layout.addWidget(value_label)
                 opti_mea.append(value_label)
 
@@ -390,6 +397,7 @@ class DebugGUI(QWidget):
         self.dynmxl_label = []
 
         joint_group_box = QGroupBox("Dynmxl R/W")
+        joint_group_box.setFixedSize(800, 180)
         joint_layout = QVBoxLayout()
 
         arms = ["A1", "A2", "A3", "A4"]
@@ -401,8 +409,8 @@ class DebugGUI(QWidget):
                 value_label = QLineEdit()
                 value_label.setText("  ?")
                 value_label.setReadOnly(True)
-                if i == 2: value_label.setFixedWidth(250)
-                else: value_label.setFixedWidth(220)
+                if i == 2: value_label.setFixedWidth(155)
+                else: value_label.setFixedWidth(136)
                 arm_des.append(value_label)
                 arm_i_layout.addWidget(value_label)
             joint_layout.addLayout(arm_i_layout)
@@ -413,6 +421,7 @@ class DebugGUI(QWidget):
 
     def create_plot_group(self):
         plot_group = QGroupBox()
+        plot_group.setFixedSize(800, 300)
         vbox = QVBoxLayout()
 
         self.plot_widgets = []
