@@ -77,6 +77,7 @@ private:
   rclcpp::Publisher<controller_interfaces::msg::ControllerDebugVal>::SharedPtr debug_val_publisher_;
   rclcpp::TimerBase::SharedPtr debugging_timer_;
 
+  // pause&resume variable
   bool is_paused_ = true; // false->resume(flight-available) / true->pause
   uint8_t prev_paddle_state_ = 0; // 0->paddle normal / 1->paddle pushed
   uint8_t paddle_holding_cnt_ = 0;

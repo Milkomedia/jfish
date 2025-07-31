@@ -157,6 +157,7 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
       else if(paddle_holding_cnt_ >= maximum_holding_time_){paddle_holding_cnt_ = 0;}
       else   {
         is_paused_ =  !is_paused_;
+        fdcl_controller_.integral_reset();
         if(is_paused_){RCLCPP_INFO(this->get_logger(), "-- [ PAUSED ] --");}
         else          {RCLCPP_INFO(this->get_logger(), "-- [ RESUME ] --");}
       }

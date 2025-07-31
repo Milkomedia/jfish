@@ -177,6 +177,14 @@ void fdcl::control::output_debug(Vector3 &X){
   // X = eV;
 }
 
+void fdcl::control::integral_reset(){
+  eIR.set_zero();
+  eI1.set_zero();
+  eI2.set_zero();
+  eIy.set_zero();
+  eIX.set_zero();
+}
+
 void fdcl::control::load_config(void){
   // controller_param.h
   auto cp = controller_param::getControlParameters();
