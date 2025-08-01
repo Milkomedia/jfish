@@ -20,10 +20,8 @@ class SbusNode(Node):
     self.killcmd_publisher_ = self.create_publisher(KillCmd, '/sbus_kill', 1)
     self.heartbeat_publisher_ = self.create_publisher(NodeState, '/sbus_state', 1)
 
-    self._hb_state = 0                   # initial dummy value
+    self._hb_state = 0                   # initial value
     self._hb_enabled = False             # heartbeat gate
-
-    self.runout_cnt = 0  # when this exceeds 3, kill -> activated
 
     # start timer but gate execution until port-connected
     self._hb_timer = self.create_timer(0.1, self._publish_heartbeat)
@@ -64,10 +62,13 @@ class SbusNode(Node):
     first_frame = await sbus.get_frame()
     first_channels = first_frame.get_rx_channels()
     fist_failsafe_status = first_frame.get_failsafe_status()
-    if first_channels[9] == 352 and fist_failsafe_status == 0:
+    if first_channels[9] == 352 and fist_failsafe_status == 0: # not killed && signal is good
       # Only after SBUS is successfully connected, send initial handshake (42)
       self._hb_state = 42
       self._hb_enabled = True
+      kill_state = False
+    else:
+      kill_state = True
       
     while rclpy.ok():
       # Wait for the next SBUS frame from the queue
@@ -83,20 +84,10 @@ class SbusNode(Node):
       msg_channels.ch = channels
       msg_channels.sbus_signal = failsafe_status
 
-      # Less strict kill logic (accounting for sudden warping)
+      # kill logic
       if channels[9]!=352 or failsafe_status!=0:
-        if self.runout_cnt > 2:
-          kill_state = True
-          if self._hb_enabled:
-            self._hb_enabled = False
-        else:
-          kill_state = False
-          self.runout_cnt += 1
-          self.get_logger().info(f"SBUS NOT GOOD...")
-          continue
-      else:
-        kill_state = False
-        self.runout_cnt = 0
+        kill_state = True
+        if self._hb_enabled: self._hb_enabled = False
 
       msg_kill = KillCmd()
       msg_kill._kill_activated = kill_state
