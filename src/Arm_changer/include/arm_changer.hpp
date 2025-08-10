@@ -89,9 +89,9 @@ private:
 
   // Latest Joint values
   double th1_ = 0.0;            // [rad]
-  double th2_ = -0.785398163;   // [rad]
-  double th3_ = 1.57079633;     // [rad]
-  double th4_ = 0.785398163;    // [rad]
+  double th2_ = 0.095993089;    // [rad]
+  double th3_ = 0.67544228;     // [rad]
+  double th4_ = 0.806341947;    // [rad]
   double th5_ = 0.0;            // [rad]
 
   std::array<double, 5> a1_q, a2_q, a3_q, a4_q;

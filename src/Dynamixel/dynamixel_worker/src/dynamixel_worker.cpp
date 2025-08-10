@@ -234,8 +234,7 @@ void DynamixelNode::align_dynamixel() {
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < 5; ++j) {
-      filtered_des_ppr[i][j] =
-        static_cast<int32_t>(init_read_ppr_[i][j] * (1.0 - alpha) + arm_des_ppr[i][j] * alpha);
+      filtered_des_ppr[i][j] = static_cast<int32_t>(init_read_ppr_[i][j] * (1.0 - alpha) + arm_des_ppr[i][j] * alpha);
     }
   }
 
@@ -324,66 +323,65 @@ void DynamixelNode::change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16
 /* for Both */
 void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg) {
   
-  // for (uint8_t i = 0; i < 5; ++i) {
-  //   arm_des_rad[0][i] = msg->a1_des[i];   // Arm 1
-  //   arm_des_rad[1][i] = msg->a2_des[i];   // Arm 2
-  //   arm_des_rad[2][i] = msg->a3_des[i];   // Arm 3
-  //   arm_des_rad[3][i] = msg->a4_des[i];   // Arm 4
-  // }
-
-  // arm_des_ppr[0][0] = msg->a1_des[0] * rad2ppr_J1 + 2048.0;  // Arm 1
-  // arm_des_ppr[1][0] = msg->a2_des[0] * rad2ppr_J1 + 2048.0;  // Arm 2
-  // arm_des_ppr[2][0] = msg->a3_des[0] * rad2ppr_J1 + 2048.0;  // Arm 3
-  // arm_des_ppr[3][0] = msg->a4_des[0] * rad2ppr_J1 + 2048.0;  // Arm 4
-    
-  // for (uint8_t i = 1; i < 5; ++i) {
-  //   if (i == 3){
-  //     arm_des_ppr[0][i] = msg->a1_des[i] * rad2ppr + 2048.0;  // Arm 1
-  //     arm_des_ppr[1][i] = msg->a2_des[i] * rad2ppr + 2048.0;  // Arm 2
-  //     arm_des_ppr[2][i] = msg->a3_des[i] * rad2ppr + 2048.0;  // Arm 3
-  //     arm_des_ppr[3][i] = msg->a4_des[i] * rad2ppr + 2048.0;  // Arm 4
-  //   }
-  //   else {
-  //     arm_des_ppr[0][i] = -msg->a1_des[i] * rad2ppr + 2048.0;   // Arm 1
-  //     arm_des_ppr[1][i] = -msg->a2_des[i] * rad2ppr + 2048.0;   // Arm 2
-  //     arm_des_ppr[2][i] = -msg->a3_des[i] * rad2ppr + 2048.0;   // Arm 3
-  //     arm_des_ppr[3][i] = -msg->a4_des[i] * rad2ppr + 2048.0;   // Arm 4
-  //   }
-  // }
-
-
-  for (uint8_t i = 0; i < 4; ++i) {
-    arm_des_rad[i][0] = 0.;
-    arm_des_rad[i][1] = -0.2114;
-    arm_des_rad[i][2] = 1.4717;
-    arm_des_rad[i][3] = 0.3105;
-    arm_des_rad[i][4] = 0.;
+  for (uint8_t i = 0; i < 5; ++i) {
+    arm_des_rad[0][i] = msg->a1_des[i];   // Arm 1
+    arm_des_rad[1][i] = msg->a2_des[i];   // Arm 2
+    arm_des_rad[2][i] = msg->a3_des[i];   // Arm 3
+    arm_des_rad[3][i] = msg->a4_des[i];   // Arm 4
   }
 
-  arm_des_ppr[0][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 1
-  arm_des_ppr[1][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 2
-  arm_des_ppr[2][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 3
-  arm_des_ppr[3][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 4
+  arm_des_ppr[0][0] = msg->a1_des[0] * rad2ppr_J1 + 2048.0;  // Arm 1
+  arm_des_ppr[1][0] = msg->a2_des[0] * rad2ppr_J1 + 2048.0;  // Arm 2
+  arm_des_ppr[2][0] = msg->a3_des[0] * rad2ppr_J1 + 2048.0;  // Arm 3
+  arm_des_ppr[3][0] = msg->a4_des[0] * rad2ppr_J1 + 2048.0;  // Arm 4
+    
+  for (uint8_t i = 1; i < 5; ++i) {
+    if (i == 3){
+      arm_des_ppr[0][i] = msg->a1_des[i] * rad2ppr + 2048.0;  // Arm 1
+      arm_des_ppr[1][i] = msg->a2_des[i] * rad2ppr + 2048.0;  // Arm 2
+      arm_des_ppr[2][i] = msg->a3_des[i] * rad2ppr + 2048.0;  // Arm 3
+      arm_des_ppr[3][i] = msg->a4_des[i] * rad2ppr + 2048.0;  // Arm 4
+    }
+    else {
+      arm_des_ppr[0][i] = -msg->a1_des[i] * rad2ppr + 2048.0;   // Arm 1
+      arm_des_ppr[1][i] = -msg->a2_des[i] * rad2ppr + 2048.0;   // Arm 2
+      arm_des_ppr[2][i] = -msg->a3_des[i] * rad2ppr + 2048.0;   // Arm 3
+      arm_des_ppr[3][i] = -msg->a4_des[i] * rad2ppr + 2048.0;   // Arm 4
+    }
+  }
 
-  arm_des_ppr[0][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 1
-  arm_des_ppr[1][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 2
-  arm_des_ppr[2][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 3
-  arm_des_ppr[3][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 4
+  // for (uint8_t i = 0; i < 4; ++i) {
+  //   arm_des_rad[i][0] = 0.;
+  //   arm_des_rad[i][1] = -0.2114;
+  //   arm_des_rad[i][2] = 1.4717;
+  //   arm_des_rad[i][3] = 0.3105;
+  //   arm_des_rad[i][4] = 0.;
+  // }
 
-  arm_des_ppr[0][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 1
-  arm_des_ppr[1][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 2
-  arm_des_ppr[2][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 3
-  arm_des_ppr[3][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 4
+  // arm_des_ppr[0][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 1
+  // arm_des_ppr[1][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 2
+  // arm_des_ppr[2][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 3
+  // arm_des_ppr[3][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 4
 
-  arm_des_ppr[0][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 1
-  arm_des_ppr[1][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 2
-  arm_des_ppr[2][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 3
-  arm_des_ppr[3][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 4
+  // arm_des_ppr[0][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 1
+  // arm_des_ppr[1][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 2
+  // arm_des_ppr[2][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 3
+  // arm_des_ppr[3][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 4
 
-  arm_des_ppr[0][4] = 0. * rad2ppr + 2048.0;   // Arm 1
-  arm_des_ppr[1][4] = 0. * rad2ppr + 2048.0;   // Arm 2
-  arm_des_ppr[2][4] = 0. * rad2ppr + 2048.0;   // Arm 3
-  arm_des_ppr[3][4] = 0. * rad2ppr + 2048.0;   // Arm 4
+  // arm_des_ppr[0][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 1
+  // arm_des_ppr[1][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 2
+  // arm_des_ppr[2][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 3
+  // arm_des_ppr[3][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 4
+
+  // arm_des_ppr[0][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 1
+  // arm_des_ppr[1][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 2
+  // arm_des_ppr[2][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 3
+  // arm_des_ppr[3][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 4
+
+  // arm_des_ppr[0][4] = 0. * rad2ppr + 2048.0;   // Arm 1
+  // arm_des_ppr[1][4] = 0. * rad2ppr + 2048.0;   // Arm 2
+  // arm_des_ppr[2][4] = 0. * rad2ppr + 2048.0;   // Arm 3
+  // arm_des_ppr[3][4] = 0. * rad2ppr + 2048.0;   // Arm 4
 
 }
 

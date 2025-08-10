@@ -36,7 +36,7 @@ constexpr double two_PI = 2.0 * M_PI;
 
 constexpr double X_offset = 0.0; // [m] 
 constexpr double Y_offset = 0.0; // [m] 
-constexpr double Z_offset = 0.11; // [m] it must be (+) sign.
+constexpr double Z_offset = 0.0; // [m] it must be (+) sign.
 
 class ControllerNode : public rclcpp::Node {
 public:

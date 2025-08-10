@@ -93,7 +93,7 @@ void ControllerNode::controller_timer_callback() {
     pitch_[2] = d_hat[1];
   }
 
-  M_out_pub = M_out_geom; //  Do Not apply dob or comestimating (yet)
+  M_out_pub = M_out_geom; //  Does Not apply dob or comestimating (yet)
 
   if (is_paused_){overriding_coeff_ -= turnoff_coeff_;} // pause
   else           {overriding_coeff_ += turnon_coeff_;} // resume
