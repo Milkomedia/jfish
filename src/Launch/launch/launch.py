@@ -2,7 +2,7 @@ import os
 os.environ['RCUTILS_CONSOLE_OUTPUT_FORMAT'] = '{message}'
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, LogInfo, TimerAction
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler, LogInfo, TimerAction, ExecuteProcess
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
@@ -34,6 +34,12 @@ def generate_launch_description():
     )
 
     mode = LaunchConfiguration('mode')
+
+    # --- rosbag: timestamped output directory ---
+    # Build an output directory: ~/rosbags/rosbag_MMDD_HHMMSS
+    import datetime
+    current_time = datetime.datetime.now().strftime("%m%d_%H%M%S")
+    bag_dir = os.path.expanduser(os.path.join("~", "rosbags", f"rosbag_{current_time}"))
 
     nodes = [
         # Watchdog Node
@@ -127,6 +133,21 @@ def generate_launch_description():
         ),
     ]
 
+    # --- rosbag record action ---
+    # Record all topics (including hidden) with a small delay for discovery.
+    bag_record = ExecuteProcess(
+    # Use a shell to redirect both stdout and stderr to /dev/null
+    cmd=[
+            '/bin/bash', '-lc',
+            # NOTE: keep your original command and add redirection
+            f"ros2 bag record -a --include-hidden-topics -o '{bag_dir}' >/dev/null 2>&1"
+        ],
+    output='log'  # no-op now, everything is redirected anyway
+    )
+
+    # start after 2.0s so that topics are discovered
+    bag_record_delayed = TimerAction(period=2.0, actions=[bag_record])
+
     # --- Event handler: print info log when last node starts ---
     on_start_info = RegisterEventHandler(
         OnProcessStart(
@@ -149,6 +170,7 @@ def generate_launch_description():
         mode_arg,
         OpaqueFunction(function=validate_mode),
         *nodes,
+        bag_record_delayed,
         on_start_info,
         shutdown_handler,
     ])
