@@ -36,7 +36,7 @@ void fdcl::control::position_control(void){
 
   // position integral terms
   eIX.integrate(c1 * eX + eV, dt); // eq (13)
-  double sat_sigma = 10.0;
+  double sat_sigma = 20.0/kIX;
   saturate(eIX.error, -sat_sigma, sat_sigma);
 
   // force 'f' along negative b3-axis - eq (14)

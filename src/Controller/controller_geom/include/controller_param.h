@@ -35,30 +35,36 @@ struct UAVParameters {
 inline ControlParameters getControlParameters() {
   ControlParameters param;
   param.use_decoupled_yaw = true;
-  param.kX << 0.0, 0.0, 40.0;
+  param.kX << 10.0, 10.0, 30.0;
   param.kV << 0.0, 0.0, 0.0;
-  param.kR << 1.0, 1.0, 0.0;
-  param.kW << 0.0, 0.0, 0.0;
+  param.kR << 20.0, 20.0, 0.0;
+  param.kW << 3.0, 3.0, 0.0;
   return param;
 }
 
 inline IntegralParameters getIntegralParameters() {
   IntegralParameters param;
-  param.kIX = 0.0;
-  param.ki = 0.0;
-  param.kIR = 0.0;
-  param.kI = 0.00;
-  param.kyI = 0.0;
-  param.c1 = 0.0;
-  param.c2 = 0.0;
-  param.c3 = 0.0;
+  param.kIX = 4.0; //위치값
+  
+  param.ki = 0.0;  //이용안하는 값
+  param.kIR = 0.0; //이용안하는 값
+  
+  param.kI = 0.00; //자세값
+  param.kyI = 0.0; //yaw값
+
+  param.c1 = 1.0; //위치
+  param.c2 = 0.0; //자세
+  param.c3 = 0.0; //yaw 
   return param;
 }
 
 inline UAVParameters getUAVParameters() {
   UAVParameters param;
-  param.m = 7.0; 
+  param.m = 10.0; 
   param.g = 9.80665;
+  param.J << 0.3, -0.0006, -0.0006,
+             -0.0006,  0.3, 0.0006,
+             -0.0006, 0.0006, 0.5318;
   return param;
 }
 

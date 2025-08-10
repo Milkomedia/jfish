@@ -25,8 +25,8 @@
 
 #define Loop_us 2500 // controller thread loop dt [us]
 
-#define CMD_XY_MAX 1.5     // pos cmd range mapped to [-k, k]m (x,y)
-#define CMD_Z_MAX  1.5     // pos cmd range mapped to [ 0, k]m (z)
+#define CMD_XY_MAX 1.0     // pos cmd range mapped to [-k, k]m (x,y)
+#define CMD_Z_MAX  0.7     // pos cmd range mapped to [ 0, k]m (z)
 #define CMD_YAW_SPD 3.0    // speed at which the yaw command is added.
 
 constexpr double mapping_factor_xy = CMD_XY_MAX / 672.0;
@@ -36,7 +36,7 @@ constexpr double two_PI = 2.0 * M_PI;
 
 constexpr double X_offset = 0.0; // [m] 
 constexpr double Y_offset = 0.6; // [m] 
-constexpr double Z_offset = 0.0; // [m] it must be (+) sign. //0.69
+constexpr double Z_offset = 0.0; // [m] it must be (+) sign.
 
 class ControllerNode : public rclcpp::Node {
 public:
