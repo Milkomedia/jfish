@@ -8,8 +8,6 @@ from launch_ros.actions import Node
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessStart, OnShutdown
 
-from launch.actions import IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
 def validate_mode(context, *args, **kwargs):
@@ -38,6 +36,13 @@ def generate_launch_description():
     mode = LaunchConfiguration('mode')
 
     nodes = [
+        # Watchdog Node
+        Node(
+            package='watchdog_manager',
+            executable='watchdog_worker',
+            name='watchdog_node',
+        ),
+
         # IMU Node
         Node(
             package='imu_worker',
@@ -60,13 +65,6 @@ def generate_launch_description():
             executable='mujoco_node',
             name='mujoco_node',
             condition=IfCondition(PythonExpression(["'", mode, "' == 'sim'"])),
-        ),
-
-        # Watchdog Node
-        Node(
-            package='watchdog_manager',
-            executable='watchdog_worker',
-            name='watchdog_node',
         ),
 
         Node(
