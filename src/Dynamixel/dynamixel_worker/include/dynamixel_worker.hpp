@@ -81,8 +81,6 @@ private:
   dynamixel::GroupSyncWrite* groupSyncWrite_;
   dynamixel::GroupSyncRead*  groupSyncRead_;
 
-  std::chrono::steady_clock::time_point last_pub_time_;
-
   const size_t init_count_max_{500};
   size_t init_count_{0};
   bool init_read_{false}; 

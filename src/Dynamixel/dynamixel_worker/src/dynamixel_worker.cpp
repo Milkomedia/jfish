@@ -8,16 +8,15 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
     portHandler_(nullptr),
     packetHandler_(nullptr),
     groupSyncWrite_(nullptr),
-    groupSyncRead_(nullptr),
-    last_pub_time_(std::chrono::steady_clock::now()) 
+    groupSyncRead_(nullptr)
 {
   // Create ROS2 subscriber for joint values
-  joint_val_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("joint_cmd", 1, std::bind(&DynamixelNode::armchanger_callback, this, std::placeholders::_1));
+  joint_val_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("/joint_cmd", 1, std::bind(&DynamixelNode::armchanger_callback, this, std::placeholders::_1));
 
   // Create ROS2 publishers for heartbeat and motor positions
   heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/dynamixel_state", 1);
-  pos_write_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("joint_write", 1);
-  pos_mea_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("joint_mea", 1);
+  pos_write_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("/joint_write", 1);
+  pos_mea_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("/joint_mea", 1);
 
   // Create timer for heartbeat
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&DynamixelNode::heartbeat_timer_callback, this));
