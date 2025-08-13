@@ -122,6 +122,19 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   A_2.block<3,1>(3,1) = Transformation_a2.block<3,1>(0,0);
   A_2.block<3,1>(6,2) = Transformation_a3.block<3,1>(0,0);
   A_2.block<3,1>(9,3) = Transformation_a4.block<3,1>(0,0);
+
+  // RCLCPP_INFO(this->get_logger(), "[%f, %f, %f]\t[%f, %f, %f]\t[%f, %f, %f]\t[%f, %f, %f]", 
+  //   Transformation_a1(0,0), Transformation_a1(1,0), Transformation_a1(2,0),
+  //   Transformation_a2(0,0), Transformation_a2(1,0), Transformation_a2(2,0),
+  //   Transformation_a3(0,0), Transformation_a3(1,0), Transformation_a3(2,0),
+  //   Transformation_a4(0,0), Transformation_a4(1,0), Transformation_a4(2,0));
+
+  // RCLCPP_INFO(this->get_logger(), "[%f, %f, %f]\t[%f, %f, %f]\t[%f, %f, %f]\t[%f, %f, %f]", 
+  //   r1(0), r1(1), r1(2),
+  //   r2(0), r2(1), r2(2),
+  //   r3(0), r3(1), r3(2),
+  //   r4(0), r4(1), r4(2));
+
   
   A = A_1*A_2;
   A_inv = A.inverse();

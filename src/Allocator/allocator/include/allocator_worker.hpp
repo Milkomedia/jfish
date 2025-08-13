@@ -19,16 +19,24 @@ using Eigen::Vector4d;
 using Eigen::VectorXd;
 using Eigen::MatrixXd;
 
-#define A1 0.13 // Arm length [m] 
-#define A2 0.15 // Arm length [m] 
-#define A3 0.18 // Arm length [m] 
-#define A4 0.6625 // Arm length [m]
-#define A5 0.64 // Arm length [m]
-#define A_B 0.06 // Arm length between {B} and {0} [m]
+#define A1  0.134 // Arm length [m] 
+#define A2  0.115 // Arm length [m] 
+#define A3  0.110 // Arm length [m] 
+#define A4  0.024 // Arm length [m]
+#define A5  0.104 // Arm length [m]
+#define A_B 0.120 // Arm length between {B} and {0} [m]
+
+//원래 값
+// #define A1 0.13 // Arm length [m] 
+// #define A2 0.15 // Arm length [m] 
+// #define A3 0.18 // Arm length [m] 
+// #define A4 0.6625 // Arm length [m]
+// #define A5 0.64 // Arm length [m]
+// #define A_B 0.06 // Arm length between {B} and {0} [m]
 
 #define pwm_alpha_ 46.5435  // F = a * pwm^2 + b
 #define pwm_beta_ 8.6111    // F = a * pwm^2 + b
-#define zeta  0.21496 // b/k Constant 1.5958e-8
+#define zeta  0.21496// b/k Constant 0.21496
 
 class AllocatorWorker : public rclcpp::Node {
 public:

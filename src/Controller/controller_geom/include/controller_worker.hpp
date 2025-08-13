@@ -26,7 +26,7 @@
 #define Loop_us 2500 // controller thread loop dt [us]
 
 #define CMD_XY_MAX 1.0     // pos cmd range mapped to [-k, k]m (x,y)
-#define CMD_Z_MAX  0.7     // pos cmd range mapped to [ 0, k]m (z)
+#define CMD_Z_MAX  1.0     // pos cmd range mapped to [ 0, k]m (z)
 #define CMD_YAW_SPD 3.0    // speed at which the yaw command is added.
 
 constexpr double mapping_factor_xy = CMD_XY_MAX / 672.0;

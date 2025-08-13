@@ -168,7 +168,7 @@ void DynamixelNode::Dynamixel_Write_Read() {
       } 
       else {
         double rad = static_cast<double>(ppr-2048) * ppr2rad;
-        arm_mea[i][j] = (j == 3) ? rad : -rad;
+        arm_mea[i][j] = (j == 3 || j ==4) ? rad : -rad;
       }
     }
   }
@@ -292,7 +292,7 @@ bool DynamixelNode::init_Dynamixel() {
         change_velocity_gain(id, 1314, 9102);
       }
       else if (j == 3) { // J4
-        change_position_gain(id, 2700, 390, 1238);
+        change_position_gain(id, 2700, 390, 100);
         change_velocity_gain(id, 2023, 2023);
       }
       else if (j == 4) { // J5
@@ -336,7 +336,7 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
   arm_des_ppr[3][0] = msg->a4_des[0] * rad2ppr_J1 + 2048.0;  // Arm 4
     
   for (uint8_t i = 1; i < 5; ++i) {
-    if (i == 3){
+    if (i == 3 || i == 4){
       arm_des_ppr[0][i] = msg->a1_des[i] * rad2ppr + 2048.0;  // Arm 1
       arm_des_ppr[1][i] = msg->a2_des[i] * rad2ppr + 2048.0;  // Arm 2
       arm_des_ppr[2][i] = msg->a3_des[i] * rad2ppr + 2048.0;  // Arm 3
@@ -378,10 +378,10 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
   // arm_des_ppr[2][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 3
   // arm_des_ppr[3][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 4
 
-  // arm_des_ppr[0][4] = 0. * rad2ppr + 2048.0;   // Arm 1
-  // arm_des_ppr[1][4] = 0. * rad2ppr + 2048.0;   // Arm 2
-  // arm_des_ppr[2][4] = 0. * rad2ppr + 2048.0;   // Arm 3
-  // arm_des_ppr[3][4] = 0. * rad2ppr + 2048.0;   // Arm 4
+  // arm_des_ppr[0][4] = -0.042 * rad2ppr + 2048.0;   // Arm 1
+  // arm_des_ppr[1][4] = 0.023 * rad2ppr + 2048.0;   // Arm 2
+  // arm_des_ppr[2][4] = -0.049 * rad2ppr + 2048.0;   // Arm 3
+  // arm_des_ppr[3][4] = 0.058 * rad2ppr + 2048.0;   // Arm 4
 
 }
 

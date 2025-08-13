@@ -88,10 +88,10 @@ void ArmChangerWorker::compute_ik(const double x, const double y, const double z
 void ArmChangerWorker::joint_callback() {
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
 
-  joint_msg.a1_des = {th1_, th2_, th3_, th4_, th5_};
-  joint_msg.a2_des = {th1_, th2_, th3_, th4_, th5_};
-  joint_msg.a3_des = {th1_, th2_, th3_, th4_, th5_};
-  joint_msg.a4_des = {th1_, th2_, th3_, th4_, th5_};
+  joint_msg.a1_des = {th1_, th2_, th3_, th4_, -0.042};
+  joint_msg.a2_des = {th1_, th2_, th3_, th4_, 0.023};
+  joint_msg.a3_des = {th1_, th2_, th3_, th4_, -0.049};
+  joint_msg.a4_des = {th1_, th2_, th3_, th4_, 0.058};
 
   joint_publisher_->publish(joint_msg);
 }
