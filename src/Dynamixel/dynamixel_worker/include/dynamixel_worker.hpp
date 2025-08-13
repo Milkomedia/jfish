@@ -28,9 +28,12 @@
 
 #define PROTOCOL_VERSION 2.0
 #define BAUDRATE         4000000
-#define DEVICE_NAME      "/dev/ttyUSB2"
+#define DEVICE_NAME      "/dev/dynamixel"
 
 #define ARM_NUM 4
+#define JOINT_NUM 5
+
+constexpr double tilted_rad = 5 / 180.0 * 3.1415926535897932384626433832706; // [rad]
 
 constexpr std::array<std::array<uint8_t, 5>, 4> DXL_IDS = {{
   {1, 2, 3, 4, 5},   // Arm 1
@@ -85,10 +88,10 @@ private:
   bool init_read_{false}; 
 
   const double arm_init_rad_[4][5] = { // [rad]
-    {0., 0.095993089, 0.67544228, 0.806341947, -0.0418879},
-    {0., 0.095993089, 0.67544228, 0.806341947, 0.02303835},
-    {0., 0.095993089, 0.67544228, 0.806341947, -0.0488692},
-    {0., 0.095993089, 0.67544228, 0.806341947, 0.058294}
+    {0., 0.095993089, 0.67544228, 0.806341947, -tilted_rad},
+    {0., 0.095993089, 0.67544228, 0.806341947, tilted_rad},
+    {0., 0.095993089, 0.67544228, 0.806341947, -tilted_rad},
+    {0., 0.095993089, 0.67544228, 0.806341947, tilted_rad}
   };
 
   int32_t init_read_ppr_[4][5] = {};

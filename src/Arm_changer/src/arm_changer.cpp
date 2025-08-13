@@ -51,6 +51,7 @@ void ArmChangerWorker::compute_ik(const double x, const double y, const double z
   Eigen::Vector3d p03 = p04 - a4_ * heading;
 
   // θ1
+  // this currently not updating (local variable)
   double th1_ = std::atan2(p03(1), p03(0));
 
   Eigen::Vector3d p01(a1_ * std::cos(th1_), a1_ * std::sin(th1_), 0);
@@ -75,23 +76,24 @@ void ArmChangerWorker::compute_ik(const double x, const double y, const double z
   th4_ = std::acos(std::clamp(x3.dot(x4_desired), -1.0, 1.0));
 
   // θ5
-  // Eigen::Matrix3d R04 = R03 * R34(th4_);
-  // Eigen::Vector3d x4 = R04.col(0);
-  // Eigen::Vector3d cross = x4.cross(heading);
-  // double sign = std::copysign(1.0, R04.col(2).dot(cross));
-  // double dot = std::clamp(x4.dot(heading), -1.0, 1.0);
-  // th5_ = sign * std::acos(dot);
-  th5_ = 0; //fixed
+  Eigen::Matrix3d R04 = R03 * R34(th4_);
+  Eigen::Vector3d x4 = R04.col(0);
+  Eigen::Vector3d cross = x4.cross(heading);
+  double sign = std::copysign(1.0, R04.col(2).dot(cross));
+  double dot = std::clamp(x4.dot(heading), -1.0, 1.0);
+  th5_ = sign * std::acos(dot);
+  
+  th5_ = tilted_rad_; //fixed
 }
 
 
 void ArmChangerWorker::joint_callback() {
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
 
-  joint_msg.a1_des = {th1_, th2_, th3_, th4_, -0.042};
-  joint_msg.a2_des = {th1_, th2_, th3_, th4_, 0.023};
-  joint_msg.a3_des = {th1_, th2_, th3_, th4_, -0.049};
-  joint_msg.a4_des = {th1_, th2_, th3_, th4_, 0.058};
+  joint_msg.a1_des = {th1_, th2_, th3_, th4_, -th5_};
+  joint_msg.a2_des = {th1_, th2_, th3_, th4_, th5_};
+  joint_msg.a3_des = {th1_, th2_, th3_, th4_, -th5_};
+  joint_msg.a4_des = {th1_, th2_, th3_, th4_, th5_};
 
   joint_publisher_->publish(joint_msg);
 }

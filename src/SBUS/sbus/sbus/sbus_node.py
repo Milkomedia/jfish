@@ -50,7 +50,7 @@ class SbusNode(Node):
     3. Convert each frame to a ROS2 message and publish it.
     """
 
-    port_name = "/dev/ttyUSB1"
+    port_name = "/dev/sbus"
     
     try:
       sbus = await SBUSReceiver.create(port_name)

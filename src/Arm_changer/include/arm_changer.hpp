@@ -13,6 +13,8 @@
 
 constexpr double PI = 3.1415926535897932384626433832706;
 
+#define TILTED_ANGLE 5 // tilted arm angle in deg
+
 class ArmChangerWorker : public rclcpp::Node {
 public:
   ArmChangerWorker();
@@ -94,6 +96,7 @@ private:
   double th4_ = 0.806341947;    // [rad]
   double th5_ = 0.0;            // [rad]
 
+  const double tilted_rad_ = TILTED_ANGLE * PI / 180.0; // [rad]
   std::array<double, 5> a1_q, a2_q, a3_q, a4_q;
 
   // heartbeat state  

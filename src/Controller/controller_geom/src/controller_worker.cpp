@@ -124,7 +124,7 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   
   // remap SBUS data to double <pos x,y,z in [m]>
   ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
-  ref_[1] = static_cast<double>(1024 - sbus_chnl_[1]) * mapping_factor_xy;  // [m]
+  ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) * mapping_factor_xy;  // [m]
   ref_[2] = static_cast<double>(352 - sbus_chnl_[3])  * mapping_factor_z; // [m]
 
   // remap SBUS data to double <yaw-heading in [rad]>

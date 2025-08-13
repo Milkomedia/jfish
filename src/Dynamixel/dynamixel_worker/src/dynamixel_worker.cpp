@@ -122,7 +122,7 @@ void DynamixelNode::Dynamixel_Write_Read() {
   groupSyncWrite_->clearParam();
   
   for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j) {
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
       // Apply LPF in PPR domain
       filtered_des_ppr[i][j] = static_cast<int>(
         0.2 * arm_des_ppr[i][j] + 0.8 * filtered_des_ppr[i][j]
@@ -145,7 +145,7 @@ void DynamixelNode::Dynamixel_Write_Read() {
   groupSyncRead_->clearParam();
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j)
+    for (size_t j = 0; j < JOINT_NUM; ++j)
       if (!groupSyncRead_->addParam(DXL_IDS[i][j]))
         dnmxl_err_cnt_++;
   }
@@ -153,7 +153,7 @@ void DynamixelNode::Dynamixel_Write_Read() {
   if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {dnmxl_err_cnt_++;}
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j) {
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
       uint8_t id = DXL_IDS[i][j];
 
       if (!groupSyncRead_->isAvailable(id, ADDR_PRESENT_POSITION, 4)) {
@@ -175,6 +175,7 @@ void DynamixelNode::Dynamixel_Write_Read() {
 
   /*  Publish  */
   dynamixel_interfaces::msg::JointVal msg;
+  
   for (size_t j = 0; j < 5; ++j) {
     msg.a1_mea[j] = arm_mea[0][j];  // Arm 1
     msg.a2_mea[j] = arm_mea[1][j];  // Arm 2
@@ -322,14 +323,14 @@ void DynamixelNode::change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16
 
 /* for Both */
 void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg) {
-  
+
   for (uint8_t i = 0; i < 5; ++i) {
     arm_des_rad[0][i] = msg->a1_des[i];   // Arm 1
     arm_des_rad[1][i] = msg->a2_des[i];   // Arm 2
     arm_des_rad[2][i] = msg->a3_des[i];   // Arm 3
     arm_des_rad[3][i] = msg->a4_des[i];   // Arm 4
   }
-
+  
   arm_des_ppr[0][0] = msg->a1_des[0] * rad2ppr_J1 + 2048.0;  // Arm 1
   arm_des_ppr[1][0] = msg->a2_des[0] * rad2ppr_J1 + 2048.0;  // Arm 2
   arm_des_ppr[2][0] = msg->a3_des[0] * rad2ppr_J1 + 2048.0;  // Arm 3
