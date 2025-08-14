@@ -133,8 +133,7 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const double x, const double 
   return {th1, th2, th3, th4, th5};
 }
 
-
-void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg) {
+void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg) {// 뭐하는 새끼임?
   // Watchdog update
   //  currently not working
   watchdog_state_ = msg->state;

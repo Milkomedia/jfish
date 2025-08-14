@@ -28,7 +28,7 @@
 
 #define PROTOCOL_VERSION 2.0
 #define BAUDRATE         4000000
-#define DEVICE_NAME      "/dev/dynamixel"
+#define DEVICE_NAME      "/dev/ttyUSB1"
 
 #define ARM_NUM 4
 #define JOINT_NUM 5

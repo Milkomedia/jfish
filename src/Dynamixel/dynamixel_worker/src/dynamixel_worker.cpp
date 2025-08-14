@@ -349,40 +349,6 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
       arm_des_ppr[3][i] = -msg->a4_des[i] * rad2ppr + 2048.0;   // Arm 4
     }
   }
-
-  // for (uint8_t i = 0; i < 4; ++i) {
-  //   arm_des_rad[i][0] = 0.;
-  //   arm_des_rad[i][1] = -0.2114;
-  //   arm_des_rad[i][2] = 1.4717;
-  //   arm_des_rad[i][3] = 0.3105;
-  //   arm_des_rad[i][4] = 0.;
-  // }
-
-  // arm_des_ppr[0][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 1
-  // arm_des_ppr[1][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 2
-  // arm_des_ppr[2][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 3
-  // arm_des_ppr[3][0] = 0. * rad2ppr_J1 + 2048.0;  // Arm 4
-
-  // arm_des_ppr[0][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 1
-  // arm_des_ppr[1][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 2
-  // arm_des_ppr[2][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 3
-  // arm_des_ppr[3][1] = 0.2114 * rad2ppr + 2048.0;   // Arm 4
-
-  // arm_des_ppr[0][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 1
-  // arm_des_ppr[1][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 2
-  // arm_des_ppr[2][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 3
-  // arm_des_ppr[3][2] = -1.4717 * rad2ppr + 2048.0;   // Arm 4
-
-  // arm_des_ppr[0][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 1
-  // arm_des_ppr[1][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 2
-  // arm_des_ppr[2][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 3
-  // arm_des_ppr[3][3] = 0.3105 * rad2ppr + 2048.0;   // Arm 4
-
-  // arm_des_ppr[0][4] = -0.042 * rad2ppr + 2048.0;   // Arm 1
-  // arm_des_ppr[1][4] = 0.023 * rad2ppr + 2048.0;   // Arm 2
-  // arm_des_ppr[2][4] = -0.049 * rad2ppr + 2048.0;   // Arm 3
-  // arm_des_ppr[3][4] = 0.058 * rad2ppr + 2048.0;   // Arm 4
-
 }
 
 void DynamixelNode::heartbeat_timer_callback() {

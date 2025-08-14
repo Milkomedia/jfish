@@ -20,7 +20,7 @@ private:
   // Callback to handle received PwmVal messages
   void sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void killCmd_callback(const sbus_interfaces::msg::KillCmd::SharedPtr msg);
-  void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg);
+  void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg); // 뭐하는 새끼임?
   std::array<double, 5> compute_ik(const double x, const double y, const double z, const Eigen::Vector3d &heading);
   void heartbeat_timer_callback();
 
@@ -45,8 +45,8 @@ private:
   // workspace constrain
   const double x_min_   = 264.; 
   const double x_max_   = 325.;
-  const double z_min_   = 50.;
-  const double z_max_   = 220.;
+  const double z_min_   = 186.;
+  const double z_max_   = 250.;
 
   // heartbeat state
   uint8_t  hb_state_;     // current heartbeat value
