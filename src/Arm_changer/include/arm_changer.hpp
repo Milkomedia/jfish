@@ -22,6 +22,7 @@ private:
   void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg); // 뭐하는 새끼임?
   std::array<double, 5> compute_ik(const double x, const double y, const double z, const Eigen::Vector3d &heading);
   bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const;
+  bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos) const;
   void heartbeat_timer_callback();
 
   // Publishers
@@ -57,6 +58,12 @@ private:
   bool kill_activated_ = true;
 
   double tilted_rad = 0.0872665; // 5 deg
+
+  // path_check
+  bool has_last_des_ = false;
+  Eigen::Vector3d last_des_pos_{std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
+  rclcpp::Time last_des_time_;
+
 };
 
 

@@ -30,6 +30,28 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   double y  = 0.0;
   double z = map(static_cast<double>(msg->ch[11]), 352, 1696, z_min_, z_max_); // sbus min/max: 352/1696
 
+  Eigen::Vector3d pos_des(x, y, z);
+  auto now_t = this->now();
+
+  if (!has_last_des_) {
+    last_des_pos_  = pos_des;
+    last_des_time_ = now_t;
+    has_last_des_  = true;
+  } 
+  else {
+    double dt = (now_t - last_des_time_).seconds();
+
+    if (!path_check(last_des_pos_, pos_des)) 
+    {
+      hb_enabled_ = false;
+      RCLCPP_WARN(this->get_logger(), "Path check failed: speed limit exceeded → heartbeat disabled");
+      return;
+    }
+  }
+
+    last_des_pos_  = pos_des;
+    last_des_time_ = now_t;
+
   Eigen::Vector3d heading1(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm1
   Eigen::Vector3d heading2(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm2
   Eigen::Vector3d heading3(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm3
@@ -108,8 +130,7 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const double x, const double 
   return {th1, th2, th3, th4, th5};
 }
 
-bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const
-{
+bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const{
   if (q.size() != 5) return false; //vec 검사
 
   const double a[5]     = {a1_, a2_, a3_, a4_, a5_};
@@ -122,7 +143,7 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
 
   const Eigen::Vector3d pos_fk = T.block<3,1>(0,3);
   Eigen::Vector3d heading_fk = T.block<3,3>(0,0).col(0);
-  
+
   if (!pos_fk.allFinite() || !heading_fk.allFinite()) return false; //inf나 NaN 검사
 
   heading_fk.normalize();
@@ -132,7 +153,7 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
 
-  return (pos_err <= 0.001) && (ang_err <= 0.001); //1mm & 0.1 deg 
+  return (pos_err <= 1.0) && (ang_err <= 0.001745); //1mm & 0.1 deg 
 }
 
 
@@ -140,6 +161,19 @@ void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeSta
   // Watchdog update
   //  currently not working
   watchdog_state_ = msg->state;
+}
+
+bool ArmChangerWorker::path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos) const{
+  constexpr double dt    = 1.0 / 200.0;   // 200 Hz = 0.005 s
+  constexpr double v_max = 150.0;         // [mm/s] 혹은 단위에 맞게 지정
+
+  if (!prev_pos.allFinite() || !curr_pos.allFinite()) return false;
+
+  Eigen::Vector3d v = (curr_pos - prev_pos) / dt;
+
+  if (!v.allFinite() || v.norm() > v_max) return false;
+
+  return true;
 }
 
 void ArmChangerWorker::heartbeat_timer_callback() {
