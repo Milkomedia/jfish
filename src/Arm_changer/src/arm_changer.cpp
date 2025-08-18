@@ -2,9 +2,6 @@
 
 using namespace std::chrono_literals;
 
-inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
-  return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
 
 inline Eigen::Matrix3d R01(double th1) {
   Eigen::Matrix3d R;
@@ -39,6 +36,7 @@ inline Eigen::Matrix3d R34(double th4) {
 }
 
 ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
+  
   // ROS2 Subscribers
   sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("/sbus_signal", 1, std::bind(&ArmChangerWorker::sbus_callback, this, std::placeholders::_1));
   killcmd_subscription_ = this->create_subscription<sbus_interfaces::msg::KillCmd>("sbus_kill", 1, std::bind(&ArmChangerWorker::killCmd_callback, this, std::placeholders::_1));

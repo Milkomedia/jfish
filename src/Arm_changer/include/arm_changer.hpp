@@ -1,5 +1,5 @@
-#ifndef ARM_CHANGER_WORKER_HPP
-#define ARM_CHANGER_WORKER_HPP
+#ifndef ARM_CHANGER_HPP
+#define ARM_CHANGER_HPP
 
 #include "rclcpp/rclcpp.hpp"
 #include "sbus_interfaces/msg/sbus_signal.hpp"
@@ -57,4 +57,10 @@ private:
   bool kill_activated_ = true;
 };
 
-#endif // ARM_CHANGER_WORKER_HPP
+
+inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
+  return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
+#endif // ARM_CHANGER_HPP
