@@ -1,39 +1,9 @@
 #include "arm_changer.hpp"
+#include <cmath>     
+#include <algorithm>   
+#include <chrono>    
 
 using namespace std::chrono_literals;
-
-
-inline Eigen::Matrix3d R01(double th1) {
-  Eigen::Matrix3d R;
-  R << std::cos(th1), 0, std::sin(th1),
-        std::sin(th1), 0, -std::cos(th1),
-        0,             1, 0;
-  return R;
-}  
-
-inline Eigen::Matrix3d R12(double th2) {
-  Eigen::Matrix3d R;
-  R << std::cos(th2), -std::sin(th2), 0,
-        std::sin(th2),  std::cos(th2), 0,
-        0,              0,             1;
-  return R;
-}
-
-inline Eigen::Matrix3d R23(double th3) {
-  Eigen::Matrix3d R;
-  R << std::cos(th3), -std::sin(th3), 0,
-        std::sin(th3),  std::cos(th3), 0,
-        0,              0,             1;
-  return R;
-}
-
-inline Eigen::Matrix3d R34(double th4) {
-  Eigen::Matrix3d R;
-  R << std::cos(th4), 0, -std::sin(th4),
-        std::sin(th4), 0,  std::cos(th4),
-        0,            -1, 0;
-  return R;
-}
 
 ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
   
@@ -60,19 +30,26 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   double y  = 0.0;
   double z = map(static_cast<double>(msg->ch[11]), 352, 1696, z_min_, z_max_); // sbus min/max: 352/1696
 
-  double tilted_rad = 0.0872665; // 5 deg
-  double sin_theta = std::sin(tilted_rad);
-  double sin_theta_sqr = sin_theta*sin_theta;
-
-  Eigen::Vector3d heading1(0.0, -sin_theta, std::sqrt(1-sin_theta_sqr)); // arm1
-  Eigen::Vector3d heading2(0.0,  sin_theta, std::sqrt(1-sin_theta_sqr)); // arm2
-  Eigen::Vector3d heading3(0.0, -sin_theta, std::sqrt(1-sin_theta_sqr)); // arm3
-  Eigen::Vector3d heading4(0.0,  sin_theta, std::sqrt(1-sin_theta_sqr)); // arm4
+  Eigen::Vector3d heading1(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm1
+  Eigen::Vector3d heading2(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm2
+  Eigen::Vector3d heading3(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm3
+  Eigen::Vector3d heading4(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm4
   
   a1_q = compute_ik(x, y, z, heading1);
   a2_q = compute_ik(x, y, z, heading2);
   a3_q = compute_ik(x, y, z, heading3);
   a4_q = compute_ik(x, y, z, heading4);
+
+  //IK check 
+  if (!ik_check(a1_q, Eigen::Vector3d(x,y,z), heading1) ||
+      !ik_check(a2_q, Eigen::Vector3d(x,y,z), heading2) ||
+      !ik_check(a3_q, Eigen::Vector3d(x,y,z), heading3) ||
+      !ik_check(a4_q, Eigen::Vector3d(x,y,z), heading4)) 
+  {
+      hb_enabled_ = false;
+      RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
+      return;
+  }
 
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
   joint_msg.a1_des = a1_q;
@@ -130,6 +107,34 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const double x, const double 
 
   return {th1, th2, th3, th4, th5};
 }
+
+bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const
+{
+  if (q.size() != 5) return false; //vec 검사
+
+  const double a[5]     = {a1_, a2_, a3_, a4_, a5_};
+  const double alpha[5] = {M_PI/2, 0.0, 0.0, M_PI/2, 0.0};
+  const double d[5]     = {0.0, 0.0, 0.0, 0.0, 0.0};
+  const double th[5]    = {q[0], q[1], q[2], q[3], q[4]};
+
+  Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+  for (int i = 0; i < 5; ++i) T *= T_dh(a[i], alpha[i], d[i], th[i]);
+
+  const Eigen::Vector3d pos_fk = T.block<3,1>(0,3);
+  Eigen::Vector3d heading_fk = T.block<3,3>(0,0).col(0);
+  
+  if (!pos_fk.allFinite() || !heading_fk.allFinite()) return false; //inf나 NaN 검사
+
+  heading_fk.normalize();
+  Eigen::Vector3d h_des = heading_des.normalized();
+
+  const double pos_err = (pos_fk - pos_des).norm();
+  const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
+  const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
+
+  return (pos_err <= 0.001) && (ang_err <= 0.001); //1mm & 0.1 deg 
+}
+
 
 void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg) {// 뭐하는 새끼임?
   // Watchdog update
