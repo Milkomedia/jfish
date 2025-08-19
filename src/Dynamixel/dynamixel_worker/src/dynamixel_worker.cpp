@@ -77,35 +77,36 @@ void DynamixelNode::Mujoco_Pub() {
   /*  Publish to mujoco  */
   dynamixel_interfaces::msg::JointVal msg1;
 
-  for (size_t i = 0; i < 5; ++i) {
-    msg1.a1_des[i] = arm_des_rad[0][i];  // Arm 1
-    msg1.a2_des[i] = arm_des_rad[1][i];  // Arm 2
-    msg1.a3_des[i] = arm_des_rad[2][i];  // Arm 3
-    msg1.a4_des[i] = arm_des_rad[3][i];  // Arm 4
+  for (size_t j = 0; j < JOINT_NUM; ++j) {
+    msg1.a1_des[j] = arm_des_rad[0][j];
+    msg1.a2_des[j] = arm_des_rad[1][j];
+    msg1.a3_des[j] = arm_des_rad[2][j];
+    msg1.a4_des[j] = arm_des_rad[3][j];
   }
   pos_write_publisher_->publish(msg1);
 
   /*  Publish to allocator  */
   dynamixel_interfaces::msg::JointVal msg2;
-  for (size_t i = 0; i < 5; ++i) {
-    msg2.a1_des[i] = arm_des_rad[0][i];
-    msg2.a2_des[i] = arm_des_rad[1][i];
-    msg2.a3_des[i] = arm_des_rad[2][i];
-    msg2.a4_des[i] = arm_des_rad[3][i];
-    msg2.a1_mea[i] = arm_mea[0][i];
-    msg2.a2_mea[i] = arm_mea[1][i];
-    msg2.a3_mea[i] = arm_mea[2][i];
-    msg2.a4_mea[i] = arm_mea[3][i];
+  for (size_t j = 0; j < JOINT_NUM; ++j) {
+    msg2.a1_des[j] = arm_des_rad[0][j];
+    msg2.a2_des[j] = arm_des_rad[1][j];
+    msg2.a3_des[j] = arm_des_rad[2][j];
+    msg2.a4_des[j] = arm_des_rad[3][j];
+
+    msg2.a1_mea[j] = arm_mea[0][j];
+    msg2.a2_mea[j] = arm_mea[1][j];
+    msg2.a3_mea[j] = arm_mea[2][j];
+    msg2.a4_mea[j] = arm_mea[3][j];
   }
   pos_mea_publisher_->publish(msg2);
 }
 
 void DynamixelNode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg) {
-  for (uint8_t i = 0; i < 5; ++i) {
-    arm_mea[0][i] = msg->a1_q[i];   // Arm 1
-    arm_mea[1][i] = msg->a2_q[i];   // Arm 2
-    arm_mea[2][i] = msg->a3_q[i];   // Arm 3
-    arm_mea[3][i] = msg->a4_q[i];   // Arm 4
+  for (uint8_t j = 0; j < JOINT_NUM; ++j) {
+    arm_mea[0][j] = msg->a1_q[j];
+    arm_mea[1][j] = msg->a2_q[j];
+    arm_mea[2][j] = msg->a3_q[j];
+    arm_mea[3][j] = msg->a4_q[j];
   }
 }
 
@@ -122,16 +123,14 @@ void DynamixelNode::Dynamixel_Write_Read() {
   
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j) {
-      // Apply LPF in PPR domain
-      filtered_des_ppr[i][j] = static_cast<int>(
-        0.2 * arm_des_ppr[i][j] + 0.8 * filtered_des_ppr[i][j]
-      );
+      
+      lpf_des_ppr[i][j] = static_cast<int>(LPF_ALPHA * arm_des_ppr[i][j] + LPF_BETA * lpf_des_ppr[i][j]);
   
       uint8_t param_goal_position[4] = {
-        DXL_LOBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
-        DXL_LOBYTE(DXL_HIWORD(filtered_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_HIWORD(filtered_des_ppr[i][j]))
+        DXL_LOBYTE(DXL_LOWORD(lpf_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_LOWORD(lpf_des_ppr[i][j])),
+        DXL_LOBYTE(DXL_HIWORD(lpf_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_HIWORD(lpf_des_ppr[i][j]))
       };
   
       if (!groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position)){dnmxl_err_cnt_++;}
@@ -140,91 +139,72 @@ void DynamixelNode::Dynamixel_Write_Read() {
 
   if (groupSyncWrite_->txPacket() != COMM_SUCCESS){dnmxl_err_cnt_++;}
 
+
   /*  Read  */
   groupSyncRead_->clearParam();
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j)
-      if (!groupSyncRead_->addParam(DXL_IDS[i][j]))
-        dnmxl_err_cnt_++;
+      if (!groupSyncRead_->addParam(DXL_IDS[i][j])) dnmxl_err_cnt_++;
   }
 
   if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {dnmxl_err_cnt_++;}
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j) {
-      uint8_t id = DXL_IDS[i][j];
 
-      if (!groupSyncRead_->isAvailable(id, ADDR_PRESENT_POSITION, 4)) {
+      if (!groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) {
         dnmxl_err_cnt_++;
         continue;
       }
 
-      int ppr = groupSyncRead_->getData(id, ADDR_PRESENT_POSITION, 4);
-
-      if (j == 0) {
-        arm_mea[i][j] = static_cast<double>(ppr-2048) * ppr2rad_J1;
-      } 
-      else {
-        double rad = static_cast<double>(ppr-2048) * ppr2rad;
-        arm_mea[i][j] = (j == 3 || j ==4) ? rad : -rad;
-      }
+      int ppr = groupSyncRead_->getData(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4);
+      arm_mea[i][j] = ppr_2_rad(static_cast<int>(j), ppr);
     }
   }
 
   /*  Publish  */
   dynamixel_interfaces::msg::JointVal msg;
   
-  for (size_t j = 0; j < 5; ++j) {
+  for (size_t j = 0; j < JOINT_NUM; ++j) {
     msg.a1_mea[j] = arm_mea[0][j];  // Arm 1
     msg.a2_mea[j] = arm_mea[1][j];  // Arm 2
     msg.a3_mea[j] = arm_mea[2][j];  // Arm 3
     msg.a4_mea[j] = arm_mea[3][j];  // Arm 4
+
     msg.a1_des[j] = arm_des_rad[0][j];  // Arm 1
     msg.a2_des[j] = arm_des_rad[1][j];  // Arm 2
     msg.a3_des[j] = arm_des_rad[2][j];  // Arm 3
     msg.a4_des[j] = arm_des_rad[3][j];  // Arm 4
   }
-
   pos_mea_publisher_->publish(msg);
 }
+
 
 void DynamixelNode::align_dynamixel() {
   if (init_count_ == 0) {
     groupSyncRead_->clearParam();
     for (size_t i = 0; i < ARM_NUM; ++i) {
-      for (size_t j = 0; j < 5; ++j) {
+      for (size_t j = 0; j < JOINT_NUM; ++j) {
         groupSyncRead_->addParam(static_cast<uint8_t>(DXL_IDS[i][j]));
       }
     }
 
-    if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {
-      RCLCPP_ERROR(get_logger(), "Initial read failed");
-      return;
-    }
+    if (groupSyncRead_-> txRxPacket() != COMM_SUCCESS) {return;}
 
     for (size_t i = 0; i < ARM_NUM; ++i) {
-      for (size_t j = 0; j < 5; ++j) {
-        uint8_t id = DXL_IDS[i][j];
-        if (groupSyncRead_->isAvailable(id, ADDR_PRESENT_POSITION, 4)) {
-          int32_t ppr = groupSyncRead_->getData(id, ADDR_PRESENT_POSITION, 4);
-          init_read_ppr_[i][j] = ppr;
-        } else {
-          RCLCPP_WARN(get_logger(), "Motor ID %d not available for initial read", id);
-        }
+      for (size_t j = 0; j < JOINT_NUM; ++j) {
+        if (groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) {
+          int32_t ppr = groupSyncRead_->getData(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4);
+          init_read_ppr[i][j] = ppr;
+        } 
+        else { RCLCPP_WARN(get_logger(), "Motor ID %d not available for initial read", DXL_IDS[i][j]); }
       }
     }
 
     for (size_t i = 0; i < ARM_NUM; ++i) {
-      for (size_t j = 0; j < 5; ++j) {
-        double rad = arm_init_rad_[i][j];
-        if (j == 0) {
-          arm_des_ppr[i][j] = static_cast<int32_t>(rad * rad2ppr_J1 + 2048.0);
-        } else if (j == 3) {
-          arm_des_ppr[i][j] = static_cast<int32_t>(rad * rad2ppr + 2048.0);
-        } else {
-          arm_des_ppr[i][j] = static_cast<int32_t>(-rad * rad2ppr + 2048.0);
-        }
+      for (size_t j = 0; j < JOINT_NUM; ++j) {
+        arm_des_ppr[i][j] = rad_2_ppr(static_cast<int>(j), arm_init_rad_[i][j]);
       }
     }
   }
@@ -233,19 +213,21 @@ void DynamixelNode::align_dynamixel() {
   if (alpha > 1.0) alpha = 1.0;
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j) {
-      filtered_des_ppr[i][j] = static_cast<int32_t>(init_read_ppr_[i][j] * (1.0 - alpha) + arm_des_ppr[i][j] * alpha);
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
+      // linear
+      init_des_ppr[i][j] = static_cast<double>(init_read_ppr[i][j] + alpha * (arm_des_ppr[i][j] - init_read_ppr[i][j]));
     }
   }
 
   groupSyncWrite_->clearParam();
+
   for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j) {
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
       uint8_t param_goal[4] = {
-        DXL_LOBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_LOWORD(filtered_des_ppr[i][j])),
-        DXL_LOBYTE(DXL_HIWORD(filtered_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_HIWORD(filtered_des_ppr[i][j]))
+        DXL_LOBYTE(DXL_LOWORD(init_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_LOWORD(init_des_ppr[i][j])),
+        DXL_LOBYTE(DXL_HIWORD(init_des_ppr[i][j])),
+        DXL_HIBYTE(DXL_HIWORD(init_des_ppr[i][j]))
       };
       groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal);
     }
@@ -254,7 +236,6 @@ void DynamixelNode::align_dynamixel() {
 
   if (++init_count_ >= init_count_max_) {
     init_read_ = true;
-    // RCLCPP_INFO(get_logger(), "Dynamixel initial alignment done.");
   }
 }
 
@@ -262,48 +243,34 @@ bool DynamixelNode::init_Dynamixel() {
   uint8_t dxl_error = 0;
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < 5; ++j) {
-      uint8_t id = DXL_IDS[i][j];
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
 
       // Set operating mode
       uint8_t mode = (j == 0) ? 4 : 3;  // J1 - Extended Position & Jn - Position
-      if (packetHandler_->write1ByteTxRx(portHandler_, id, ADDR_OPERATING_MODE, mode, &dxl_error) != COMM_SUCCESS){
-        std::cerr << "Failed to set operating mode for motor ID " << static_cast<int>(id) << std::endl;
+      if (packetHandler_->write1ByteTxRx(portHandler_, DXL_IDS[i][j], ADDR_OPERATING_MODE, mode, &dxl_error) != COMM_SUCCESS){
+        std::cerr << "Failed to set operating mode for motor ID " << static_cast<int>(DXL_IDS[i][j]) << std::endl;
         return false;
       }
 
       // Enable torque
-      if (packetHandler_->write1ByteTxRx(portHandler_, id, ADDR_TORQUE_ENABLE, 1, &dxl_error) != COMM_SUCCESS){
-        std::cerr << "Failed to enable torque for motor ID " << static_cast<int>(id) << std::endl;
-        return false;
-      }
+      // if (packetHandler_->write1ByteTxRx(portHandler_, DXL_IDS[i][j], ADDR_TORQUE_ENABLE, 1, &dxl_error) != COMM_SUCCESS){
+      //   std::cerr << "Failed to enable torque for motor ID " << static_cast<int>(DXL_IDS[i][j]) << std::endl;
+      //   return false;
+      // }
 
-      // Set PID gains
-      if (j == 0) { // J1
-        change_position_gain(id, 800, 0, 0);
-        change_velocity_gain(id, 100, 20);
-      }
-      else if (j == 1) { // J2
-        change_position_gain(id, 2562, 1348, 809);
-        change_velocity_gain(id, 1079, 3843);
-      }
-      else if (j == 2) { // J3
-        change_position_gain(id, 2500, 1341, 3843);
-        change_velocity_gain(id, 1314, 9102);
-      }
-      else if (j == 3) { // J4
-        change_position_gain(id, 2700, 390, 100);
-        change_velocity_gain(id, 2023, 2023);
-      }
-      else if (j == 4) { // J5
-        change_position_gain(id, 700, 0, 0);
-        change_velocity_gain(id, 100, 1920);
-      }
+      // Set gain tune
+      const Gains& g = setGains[j];
+      change_position_gain(DXL_IDS[i][j], g.pos_P, g.pos_I, g.pos_D);
+      change_velocity_gain(DXL_IDS[i][j], g.vel_P, g.vel_I);
     }
   }
 
-  groupSyncWrite_ = new GroupSyncWrite(portHandler_, packetHandler_, ADDR_GOAL_POSITION, 4);
-  groupSyncRead_  = new GroupSyncRead(portHandler_, packetHandler_, ADDR_PRESENT_POSITION, 4);
+  groupSyncWrite_ = new GroupSyncWrite(portHandler_, packetHandler_, ADDR_GOAL_POSITION,    4);
+  groupSyncRead_  = new GroupSyncRead (portHandler_, packetHandler_, ADDR_PRESENT_POSITION, 4);
+  
+  syncread_set(groupSyncRead_);
+  read_setting_ = true;
+  
   return true;
 }
 
@@ -322,31 +289,17 @@ void DynamixelNode::change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16
 
 /* for Both */
 void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg) {
-
-  for (uint8_t i = 0; i < 5; ++i) {
-    arm_des_rad[0][i] = msg->a1_des[i];   // Arm 1
-    arm_des_rad[1][i] = msg->a2_des[i];   // Arm 2
-    arm_des_rad[2][i] = msg->a3_des[i];   // Arm 3
-    arm_des_rad[3][i] = msg->a4_des[i];   // Arm 4
+  
+  for (uint8_t j = 0; j < JOINT_NUM; ++j) {
+    arm_des_rad[0][j] = msg->a1_des[j];   // Arm 1
+    arm_des_rad[1][j] = msg->a2_des[j];   // Arm 2
+    arm_des_rad[2][j] = msg->a3_des[j];   // Arm 3
+    arm_des_rad[3][j] = msg->a4_des[j];   // Arm 4
   }
   
-  arm_des_ppr[0][0] = msg->a1_des[0] * rad2ppr_J1 + 2048.0;  // Arm 1
-  arm_des_ppr[1][0] = msg->a2_des[0] * rad2ppr_J1 + 2048.0;  // Arm 2
-  arm_des_ppr[2][0] = msg->a3_des[0] * rad2ppr_J1 + 2048.0;  // Arm 3
-  arm_des_ppr[3][0] = msg->a4_des[0] * rad2ppr_J1 + 2048.0;  // Arm 4
-    
-  for (uint8_t i = 1; i < 5; ++i) {
-    if (i == 3 || i == 4){
-      arm_des_ppr[0][i] = msg->a1_des[i] * rad2ppr + 2048.0;  // Arm 1
-      arm_des_ppr[1][i] = msg->a2_des[i] * rad2ppr + 2048.0;  // Arm 2
-      arm_des_ppr[2][i] = msg->a3_des[i] * rad2ppr + 2048.0;  // Arm 3
-      arm_des_ppr[3][i] = msg->a4_des[i] * rad2ppr + 2048.0;  // Arm 4
-    }
-    else {
-      arm_des_ppr[0][i] = -msg->a1_des[i] * rad2ppr + 2048.0;   // Arm 1
-      arm_des_ppr[1][i] = -msg->a2_des[i] * rad2ppr + 2048.0;   // Arm 2
-      arm_des_ppr[2][i] = -msg->a3_des[i] * rad2ppr + 2048.0;   // Arm 3
-      arm_des_ppr[3][i] = -msg->a4_des[i] * rad2ppr + 2048.0;   // Arm 4
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
+      arm_des_ppr[i][j] = rad_2_ppr(static_cast<int>(j), arm_des_rad[i][j]);
     }
   }
 }

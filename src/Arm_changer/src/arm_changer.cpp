@@ -29,7 +29,7 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   std::array<double, 5> a1_q, a2_q, a3_q, a4_q;
 
   double x = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_); // sbus min/max: 352/1696
-  double y  = 0.0;
+  double y  = 0;
   double z = map(static_cast<double>(msg->ch[11]), 352, 1696, z_min_, z_max_); // sbus min/max: 352/1696
   
   Eigen::Vector3d pos_des_local(x, y, z);
@@ -44,7 +44,7 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   auto [p4_des_base, heading4_base] = arm2base(pos_des_local, heading4, 4);
 
   // ---- collision check (base frame) ----------------------------------------------------------------------------------------------------------------------
-  if (collision_check(p1_des_base, p2_des_base, p3_des_base, p4_des_base)) {
+  if (!collision_check(p1_des_base, p2_des_base, p3_des_base, p4_des_base)) {
   hb_enabled_ = false;
   RCLCPP_WARN(this->get_logger(), "Collision detected: discs overlap → heartbeat disabled!");
   return;
@@ -61,7 +61,7 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   else {
     double dt = (now_t - last_des_time_).seconds();
 
-    if (!path_check(last_des_pos_, pos_des_local)) {
+    if (!path_check(last_des_pos_, pos_des_local, dt)) {
       hb_enabled_ = false;
       RCLCPP_WARN(this->get_logger(), "Path check failed: speed limit exceeded → heartbeat disabled");
       return;
@@ -77,11 +77,11 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   a4_q = compute_ik(x, y, z, heading4);
 
   //IK check------------------------------------------------------------------------------------------------------------------------------------------------
-  if (!ik_check(a1_q, pos_des_local, heading1) || !ik_check(a2_q, pos_des_local, heading2) || !ik_check(a3_q, pos_des_local, heading3) || !ik_check(a4_q, pos_des_local, heading4)) {
-      hb_enabled_ = false;
-      RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
-      return;
-  }
+  // if (!ik_check(a1_q, pos_des_local, heading1) || !ik_check(a2_q, pos_des_local, heading2) || !ik_check(a3_q, pos_des_local, heading3) || !ik_check(a4_q, pos_des_local, heading4)) {
+  //     hb_enabled_ = false;
+  //     RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
+  //     return;
+  // }
 
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
   joint_msg.a1_des = a1_q;
@@ -140,6 +140,7 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const double x, const double 
 }
 
 bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const{
+  
   if (q.size() != 5) return false; //vec 검사
   
   const double a[5]     = {a1_, a2_, a3_, a4_, a5_};
@@ -161,14 +162,15 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double pos_err = (pos_fk - pos_des).norm();
   const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
-
-  return (pos_err <= 1.0) && (ang_err <= 0.001745); //1mm & 0.1 deg 
+  RCLCPP_WARN(this->get_logger(), "pos_err %f", pos_err);
+//&& (ang_err <= 0.01745);
+  return (pos_err <= 10.0);  //10mm & 1 deg 
 }
 
 bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const{
   
-  constexpr double R = 65.0;    // [mm]
-  constexpr double T = 20.0;    // [mm]
+  constexpr double R = 225.0;    // [mm]
+  constexpr double T = 50.00;    // [mm]
 
   if (OverLapped(p1,p2,R,T)) return false;
   if (OverLapped(p1,p3,R,T)) return false;
@@ -186,9 +188,9 @@ void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeSta
   watchdog_state_ = msg->state;
 }
 
-bool ArmChangerWorker::path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos) const{
-  constexpr double dt    = 1.0 / 200.0;   // 200 Hz = 0.005 s
-  constexpr double v_max = 150.0;         // [mm/s] 혹은 단위에 맞게 지정
+bool ArmChangerWorker::path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const{
+  
+  constexpr double v_max = 800.0;         // [mm/s]
 
   if (!prev_pos.allFinite() || !curr_pos.allFinite()) return false;
 

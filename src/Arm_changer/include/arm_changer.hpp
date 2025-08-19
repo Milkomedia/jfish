@@ -25,7 +25,7 @@ private:
 
   //check funtion
   bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const;
-  bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos) const;
+  bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const;
   bool collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const;
 
   
@@ -46,7 +46,7 @@ private:
   const double a2_ = 115.;
   const double a3_ = 110.;
   const double a4_ = 24.;
-  const double a5_ = 104.;
+  const double a5_ = 104.; //68.0
     
   // workspace constrain
   const double x_min_   = 264.; 
@@ -144,7 +144,7 @@ static inline bool OverLapped(const Eigen::Vector3d& a, const Eigen::Vector3d& b
 
   const double rrsum = (2.0 * R) * (2.0 * R);
 
-  if (ddistance < rrsum || dz < T) return true;
+  if (ddistance < rrsum && dz < T) return true;
   return false;
 }
 

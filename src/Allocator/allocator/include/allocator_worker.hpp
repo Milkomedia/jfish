@@ -8,35 +8,10 @@
 #include "allocator_interfaces/msg/allocator_debug_val.hpp" //joint_val이 이안에 mea로 들어가짐 
 #include "dynamixel_interfaces/msg/joint_val.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
+
 #include <Eigen/Dense>
 #include <vector>
 #include <algorithm>
-
-using Eigen::Matrix3d;
-using Eigen::Matrix4d;
-using Eigen::Vector3d;
-using Eigen::Vector4d;
-using Eigen::VectorXd;
-using Eigen::MatrixXd;
-
-#define A1  0.134 // Arm length [m] 
-#define A2  0.115 // Arm length [m] 
-#define A3  0.110 // Arm length [m] 
-#define A4  0.024 // Arm length [m]
-#define A5  0.104 // Arm length [m]
-#define A_B 0.120 // Arm length between {B} and {0} [m]
-
-//원래 값
-// #define A1 0.13 // Arm length [m] 
-// #define A2 0.15 // Arm length [m] 
-// #define A3 0.18 // Arm length [m] 
-// #define A4 0.6625 // Arm length [m]
-// #define A5 0.64 // Arm length [m]
-// #define A_B 0.06 // Arm length between {B} and {0} [m]
-
-#define pwm_alpha_ 46.5435  // F = a * pwm^2 + b
-#define pwm_beta_ 8.6111    // F = a * pwm^2 + b
-#define zeta  0.21496// b/k Constant 0.21496
 
 class AllocatorWorker : public rclcpp::Node {
 public:
@@ -48,7 +23,6 @@ private:
   void jointValCallback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg);
   void heartbeat_timer_callback();
   void debugging_timer_callback();
-  void publishPwmVal();
 
   // Subscribers
   rclcpp::Subscription<controller_interfaces::msg::ControllerOutput>::SharedPtr controller_subscriber_;
@@ -72,41 +46,52 @@ private:
   double filtered_frequency_ = 1200.0; // [Hz] calculated from average dt
   rclcpp::Time last_callback_time_;    // Timestamp of the last callback
   
-  std::array<double, 4> q_B0 = {M_PI/4, (M_PI/4+M_PI/2),-(M_PI/4+M_PI/2),-M_PI/4};
+  // BLDC Motor Model
+  const double pwm_alpha_ = 46.5435;  // F = a * pwm^2 + b
+  const double pwm_beta_ = 8.6111;    // F = a * pwm^2 + b
+  const double zeta = 0.21496;        // b/k constant
+  Eigen::Vector4d zeta_;
 
-  // mujoco or dynamixel [rad]
-  double arm_des[4][5] = {
+  // Control Allocation params
+  Eigen::Matrix<double,6,4> DH_params_; // 6x4 DH table (rows: link 0..5; cols: a, alpha, d, theta0)
+  Eigen::Vector4d q_B0_;
+  Eigen::Vector4d f_;
+  Eigen::Vector4d pwm_;
+
+  // arm pos [rad] (mujoco or dynamixel)
+  double arm_des_[4][5] = {
     {0.785398,  0.0, -1.50944, 0.0, 0.0},   // a1_des
     {2.35619,   0.0, -1.50944, 0.0, 0.0},   // a2_des
     {-2.35619,  0.0, -1.50944, 0.0, 0.0},   // a3_des
     {-0.785398, 0.0, -1.50944, 0.0, 0.0}};  // a4_des
 
-  double arm_mea[4][5] = { 
+  double arm_mea_[4][5] = { 
     {0., -0.84522, 1.50944, 0.90812, 0.},   // a1_mea
     {0., -0.84522, 1.50944, 0.90812, 0.},   // a2_mea
     {0., -0.84522, 1.50944, 0.90812, 0.},   // a3_mea
     {0., -0.84522, 1.50944, 0.90812, 0.}};  // a4_mea
 
-  MatrixXd DH_params;
-  Vector4d W1 = Vector4d::Zero();   // PID-control result [N.m N.m N.m N]
-  Vector4d f = Vector4d::Zero();    // Allocated result [N N N N]
-  Vector4d pwm = Vector4d::Zero();  // Allocated result [pwm pwm pwm pwm]
-  Vector3d CoM = Vector3d::Zero();  // Center of Mass position [m m m]
-  
-  Matrix4d Transformation_a1 = Matrix4d::Identity();
-  Matrix4d Transformation_a2 = Matrix4d::Identity();
-  Matrix4d Transformation_a3 = Matrix4d::Identity();
-  Matrix4d Transformation_a4 = Matrix4d::Identity();
-
-  MatrixXd A_1 = MatrixXd::Zero(4, 12);
-  MatrixXd A_2 = MatrixXd::Zero(12, 4);
-  MatrixXd A = MatrixXd::Zero(4, 4);
-  MatrixXd A_inv = MatrixXd::Zero(4,4);
-
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
   bool     hb_enabled_;   // gate flag
   uint8_t heartbeat_state_; // previous node state
+
+  static inline Eigen::Matrix4d compute_DH(double a, double alpha, double d, double theta) {
+    Eigen::Matrix4d T;
+    T << cos(theta), -sin(theta) * cos(alpha),  sin(theta) * sin(alpha), a * cos(theta),
+        sin(theta),  cos(theta) * cos(alpha), -cos(theta) * sin(alpha), a * sin(theta),
+        0,           sin(alpha),              cos(alpha),              d,
+        0,           0,                        0,                      1;
+    return T;
+  }
+
+  static inline Eigen::Matrix3d skew(const Eigen::Vector3d& v) {
+  return (Eigen::Matrix3d() << 
+            0.0,    -v.z(),  v.y(),
+            v.z(),   0.0,   -v.x(),
+            -v.y(),   v.x(),  0.0
+            ).finished();
+  }
 };
 
 #endif // ALLOCATOR_WORKER_HPP
