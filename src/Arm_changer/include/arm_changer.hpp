@@ -21,9 +21,14 @@ private:
   void killCmd_callback(const sbus_interfaces::msg::KillCmd::SharedPtr msg);
   void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg); // 뭐하는 새끼임?
   std::array<double, 5> compute_ik(const double x, const double y, const double z, const Eigen::Vector3d &heading);
+  void heartbeat_timer_callback();
+
+  //check funtion
   bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const;
   bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos) const;
-  void heartbeat_timer_callback();
+  bool collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const;
+
+  
 
   // Publishers
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_publisher_;
@@ -42,7 +47,7 @@ private:
   const double a3_ = 110.;
   const double a4_ = 24.;
   const double a5_ = 104.;
-
+    
   // workspace constrain
   const double x_min_   = 264.; 
   const double x_max_   = 325.;
@@ -113,6 +118,34 @@ inline Eigen::Matrix3d R34(double th4) {
 
 static inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
   return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+inline std::pair<Eigen::Vector3d,Eigen::Vector3d> arm2base(const Eigen::Vector3d& pos_local, const Eigen::Vector3d& n_local, int arm_number)
+{
+  const double A_B = 120;
+  const double q_B0[4] = {M_PI/4, M_PI/4 + M_PI/2, -(M_PI/4 + M_PI/2), -M_PI/4};
+  const double yaw = q_B0[arm_number - 1];
+  const Eigen::Matrix4d TB0 = T_dh(A_B, 0.0, 0.0, yaw);
+  const Eigen::Matrix3d R   = TB0.block<3,3>(0,0);
+  const Eigen::Vector3d t   = TB0.block<3,1>(0,3);
+
+  const Eigen::Vector3d p_base = R * pos_local + t;
+  const Eigen::Vector3d n_base = (R * n_local).normalized();
+
+  return {p_base, n_base};
+}
+
+static inline bool OverLapped(const Eigen::Vector3d& a, const Eigen::Vector3d& b, double R, double T)
+{
+  const double dx = a.x() - b.x();
+  const double dy = a.y() - b.y();
+  const double dz = std::abs(a.z() - b.z());
+  const double ddistance = dx*dx + dy*dy;
+
+  const double rrsum = (2.0 * R) * (2.0 * R);
+
+  if (ddistance < rrsum || dz < T) return true;
+  return false;
 }
 
 #endif // ARM_CHANGER_HPP

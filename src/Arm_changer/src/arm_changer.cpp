@@ -24,50 +24,60 @@ ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
 }
 
 void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {
+
+  //local(J1)2global(base) cmd-------------------------------------------------------------------------------------------------------------------------------
   std::array<double, 5> a1_q, a2_q, a3_q, a4_q;
 
   double x = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_); // sbus min/max: 352/1696
   double y  = 0.0;
   double z = map(static_cast<double>(msg->ch[11]), 352, 1696, z_min_, z_max_); // sbus min/max: 352/1696
+  
+  Eigen::Vector3d pos_des_local(x, y, z);
+  Eigen::Vector3d heading1(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm1
+  Eigen::Vector3d heading2(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm2
+  Eigen::Vector3d heading3(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm3
+  Eigen::Vector3d heading4(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm4
 
-  Eigen::Vector3d pos_des(x, y, z);
+  auto [p1_des_base, heading1_base] = arm2base(pos_des_local, heading1, 1);
+  auto [p2_des_base, heading2_base] = arm2base(pos_des_local, heading2, 2);
+  auto [p3_des_base, heading3_base] = arm2base(pos_des_local, heading3, 3);
+  auto [p4_des_base, heading4_base] = arm2base(pos_des_local, heading4, 4);
+
+  // ---- collision check (base frame) ----------------------------------------------------------------------------------------------------------------------
+  if (collision_check(p1_des_base, p2_des_base, p3_des_base, p4_des_base)) {
+  hb_enabled_ = false;
+  RCLCPP_WARN(this->get_logger(), "Collision detected: discs overlap → heartbeat disabled!");
+  return;
+  }
+
+  //path velocity check--------------------------------------------------------------------------------------------------------------------------------------
   auto now_t = this->now();
 
   if (!has_last_des_) {
-    last_des_pos_  = pos_des;
+    last_des_pos_  = pos_des_local;
     last_des_time_ = now_t;
     has_last_des_  = true;
   } 
   else {
     double dt = (now_t - last_des_time_).seconds();
 
-    if (!path_check(last_des_pos_, pos_des)) 
-    {
+    if (!path_check(last_des_pos_, pos_des_local)) {
       hb_enabled_ = false;
       RCLCPP_WARN(this->get_logger(), "Path check failed: speed limit exceeded → heartbeat disabled");
       return;
     }
   }
+  last_des_pos_  = pos_des_local;
+  last_des_time_ = now_t;
 
-    last_des_pos_  = pos_des;
-    last_des_time_ = now_t;
-
-  Eigen::Vector3d heading1(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm1
-  Eigen::Vector3d heading2(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm2
-  Eigen::Vector3d heading3(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm3
-  Eigen::Vector3d heading4(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm4
-  
+  //FK2IK---------------------------------------------------------------------------------------------------------------------------------------------------
   a1_q = compute_ik(x, y, z, heading1);
   a2_q = compute_ik(x, y, z, heading2);
   a3_q = compute_ik(x, y, z, heading3);
   a4_q = compute_ik(x, y, z, heading4);
 
-  //IK check 
-  if (!ik_check(a1_q, Eigen::Vector3d(x,y,z), heading1) ||
-      !ik_check(a2_q, Eigen::Vector3d(x,y,z), heading2) ||
-      !ik_check(a3_q, Eigen::Vector3d(x,y,z), heading3) ||
-      !ik_check(a4_q, Eigen::Vector3d(x,y,z), heading4)) 
-  {
+  //IK check------------------------------------------------------------------------------------------------------------------------------------------------
+  if (!ik_check(a1_q, pos_des_local, heading1) || !ik_check(a2_q, pos_des_local, heading2) || !ik_check(a3_q, pos_des_local, heading3) || !ik_check(a4_q, pos_des_local, heading4)) {
       hb_enabled_ = false;
       RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
       return;
@@ -87,7 +97,6 @@ void ArmChangerWorker::killCmd_callback(const sbus_interfaces::msg::KillCmd::Sha
   kill_activated_ = msg->kill_activated;
   // RCLCPP_INFO(this->get_logger(), "kill_activated_: %s", kill_activated_ ? "true" : "false");
 }
-
 
 std::array<double, 5> ArmChangerWorker::compute_ik(const double x, const double y, const double z, const Eigen::Vector3d &heading_input){
   Eigen::Vector3d heading = heading_input.normalized();  // Normalize
@@ -132,7 +141,7 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const double x, const double 
 
 bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const{
   if (q.size() != 5) return false; //vec 검사
-
+  
   const double a[5]     = {a1_, a2_, a3_, a4_, a5_};
   const double alpha[5] = {M_PI/2, 0.0, 0.0, M_PI/2, 0.0};
   const double d[5]     = {0.0, 0.0, 0.0, 0.0, 0.0};
@@ -156,6 +165,20 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   return (pos_err <= 1.0) && (ang_err <= 0.001745); //1mm & 0.1 deg 
 }
 
+bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const{
+  
+  constexpr double R = 65.0;    // [mm]
+  constexpr double T = 20.0;    // [mm]
+
+  if (OverLapped(p1,p2,R,T)) return false;
+  if (OverLapped(p1,p3,R,T)) return false;
+  if (OverLapped(p1,p4,R,T)) return false;
+  if (OverLapped(p2,p3,R,T)) return false;
+  if (OverLapped(p2,p4,R,T)) return false;
+  if (OverLapped(p3,p4,R,T)) return false;
+
+  return true; 
+}
 
 void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg) {// 뭐하는 새끼임?
   // Watchdog update
