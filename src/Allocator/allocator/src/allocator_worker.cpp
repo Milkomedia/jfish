@@ -15,7 +15,8 @@ AllocatorWorker::AllocatorWorker()
        0.068,   0.0,     0.0,  0.0;   // 4->5
 
   pwm_.setZero();
-  f_.setZero();
+  C1_.setZero();
+  C2_.setZero();
 
   // Subscriber
   controller_subscriber_ = this->create_subscription<controller_interfaces::msg::ControllerOutput>("controller_output", 1, std::bind(&AllocatorWorker::controllerCallback, this, std::placeholders::_1));
@@ -85,12 +86,12 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   // get thrust
   const Eigen::Matrix4d A = A1 * A2;
   Eigen::FullPivLU<Eigen::Matrix4d> lu(A);
-  if (lu.isInvertible()) {f_ = lu.solve(Wrench);}
-  else {f_ = (A.transpose()*A + 1e-8*Eigen::Matrix4d::Identity()).ldlt().solve(A.transpose()*Wrench);}
+  if (lu.isInvertible()) {C1_ = lu.solve(Wrench);}
+  else {C1_ = (A.transpose()*A + 1e-8*Eigen::Matrix4d::Identity()).ldlt().solve(A.transpose()*Wrench);}
 
   // thrust -> pwm
   for (int i = 0; i < 4; ++i) {
-    const double val = std::max(0.0, (f_(i) - pwm_beta_) / pwm_alpha_);
+    const double val = std::max(0.0, (C1_(i) - pwm_beta_) / pwm_alpha_);
     pwm_(i) = std::sqrt(val);
     pwm_(i) = std::clamp(pwm_(i), 0.0, 1.0);
   }
@@ -102,6 +103,14 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   pwm_msg.pwm3 = pwm_(2);
   pwm_msg.pwm4 = pwm_(3);
   pwm_publisher_->publish(pwm_msg);
+
+  // send to armchanger
+  auto tilt_msg = allocator_interfaces::msg::TiltAngleVal();
+  tilt_msg.th1 = C2_(0);
+  tilt_msg.th2 = C2_(1);
+  tilt_msg.th3 = C2_(2);
+  tilt_msg.th4 = C2_(3);
+  tilt_angle_publisher_->publish(tilt_msg);
 }
 
 void AllocatorWorker::jointValCallback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg)  {
@@ -138,7 +147,7 @@ void AllocatorWorker::debugging_timer_callback()
   for (int i = 0; i < 4; i++) 
   {
     info_msg.pwm[i] = pwm_(i);
-    info_msg.thrust[i] = f_(i);
+    info_msg.thrust[i] = C1_(i);
   }
 
   for (size_t i = 0; i < 5; ++i) 

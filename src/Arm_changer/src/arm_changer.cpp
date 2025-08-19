@@ -182,10 +182,11 @@ bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Ve
   return true; 
 }
 
-void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg) {// 뭐하는 새끼임?
-  // Watchdog update
-  //  currently not working
-  watchdog_state_ = msg->state;
+void ArmChangerWorker::TiltAngle_callback(const allocator_interfaces::msg::TiltAngleVal::SharedPtr msg)  {
+  C2_(0) = msg->th1;
+  C2_(1) = msg->th2;
+  C2_(2) = msg->th3;
+  C2_(3) = msg->th4;
 }
 
 bool ArmChangerWorker::path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const{

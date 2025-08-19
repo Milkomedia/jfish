@@ -6,6 +6,7 @@ find_package(rclcpp_components REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(sbus_interfaces REQUIRED)
+find_package(allocator_interfaces REQUIRED)
 find_package(dynamixel_interfaces REQUIRED) 
 find_package(watchdog_interfaces REQUIRED)
 
@@ -20,6 +21,7 @@ ament_target_dependencies(arm_changer
   rclcpp
   sbus_interfaces
   dynamixel_interfaces
+  allocator_interfaces
   watchdog_interfaces
   Eigen3
 )

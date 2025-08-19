@@ -11,6 +11,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
 set(msg_files
+  "msg/TiltAngleVal.msg"
   "msg/PwmVal.msg"
   "msg/AllocatorDebugVal.msg"
 )

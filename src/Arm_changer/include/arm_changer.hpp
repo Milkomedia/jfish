@@ -5,6 +5,7 @@
 #include "sbus_interfaces/msg/sbus_signal.hpp"
 #include "sbus_interfaces/msg/kill_cmd.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
+#include "allocator_interfaces/msg/tilt_angle_val.hpp"
 #include "dynamixel_interfaces/msg/joint_val.hpp"
 #include <array>
 #include <Eigen/Dense>
@@ -19,7 +20,7 @@ private:
   // Callback to handle received PwmVal messages
   void sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void killCmd_callback(const sbus_interfaces::msg::KillCmd::SharedPtr msg);
-  void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg); // 뭐하는 새끼임?
+  void TiltAngle_callback(const allocator_interfaces::msg::TiltAngleVal::SharedPtr msg);
   std::array<double, 5> compute_ik(const double x, const double y, const double z, const Eigen::Vector3d &heading);
   void heartbeat_timer_callback();
 
@@ -29,12 +30,12 @@ private:
   bool collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const;
 
   
-
   // Publishers
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_publisher_;
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
 
   // Subscribers
+  rclcpp::Subscription<allocator_interfaces::msg::TiltAngleVal>::SharedPtr tilt_angle_val_subscription_;
   rclcpp::Subscription<sbus_interfaces::msg::KillCmd>::SharedPtr killcmd_subscription_;
   rclcpp::Subscription<sbus_interfaces::msg::SbusSignal>::SharedPtr sbus_subscription_;
 
@@ -59,16 +60,15 @@ private:
   bool     hb_enabled_;   // gate flag
 
   // Watchdog state
-  uint8_t watchdog_state_ = 1; // default(normal) is 1.
   bool kill_activated_ = true;
 
   double tilted_rad = 0.0872665; // 5 deg
+  Eigen::Vector4d C2_;           // calculated tilted angle [rad]
 
   // path_check
   bool has_last_des_ = false;
   Eigen::Vector3d last_des_pos_{std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
   rclcpp::Time last_des_time_;
-
 };
 
 

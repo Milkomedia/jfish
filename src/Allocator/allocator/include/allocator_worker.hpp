@@ -4,6 +4,7 @@
 #include <cmath> 
 #include "rclcpp/rclcpp.hpp"
 #include "controller_interfaces/msg/controller_output.hpp"
+#include "allocator_interfaces/msg/tilt_angle_val.hpp"
 #include "allocator_interfaces/msg/pwm_val.hpp"
 #include "allocator_interfaces/msg/allocator_debug_val.hpp" //joint_val이 이안에 mea로 들어가짐 
 #include "dynamixel_interfaces/msg/joint_val.hpp"
@@ -29,6 +30,7 @@ private:
   rclcpp::Subscription<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_subscriber_;
   
   // Publishers
+  rclcpp::Publisher<allocator_interfaces::msg::TiltAngleVal>::SharedPtr tilt_angle_publisher_;
   rclcpp::Publisher<allocator_interfaces::msg::PwmVal>::SharedPtr pwm_publisher_;
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
   rclcpp::Publisher<allocator_interfaces::msg::AllocatorDebugVal>::SharedPtr debug_val_publisher_;
@@ -54,9 +56,10 @@ private:
 
   // Control Allocation params
   Eigen::Matrix<double,6,4> DH_params_; // 6x4 DH table (rows: link 0..5; cols: a, alpha, d, theta0)
-  Eigen::Vector4d q_B0_;
-  Eigen::Vector4d f_;
-  Eigen::Vector4d pwm_;
+  Eigen::Vector4d q_B0_;                // Body to Arm rotation angle in z axis [rad]
+  Eigen::Vector4d C1_;                  // calculated thrust f_1234 [N]
+  Eigen::Vector4d C2_;                  // calculated tilted angle [rad]
+  Eigen::Vector4d pwm_;                 // calculated pwm [0.0 ~  0.1]
 
   // arm pos [rad] (mujoco or dynamixel)
   double arm_des_[4][5] = {

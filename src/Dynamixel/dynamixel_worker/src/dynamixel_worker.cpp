@@ -113,10 +113,10 @@ void DynamixelNode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::Sh
 /* for real */
 void DynamixelNode::Dynamixel_Write_Read() {
 
-  if (!init_read_) {
-    align_dynamixel();
-    return;
-  }
+  // if (!init_read_) {
+  //   align_dynamixel();
+  //   return;
+  // }
   
   /*  Write  */
   groupSyncWrite_->clearParam();
@@ -181,63 +181,63 @@ void DynamixelNode::Dynamixel_Write_Read() {
 }
 
 
-void DynamixelNode::align_dynamixel() {
-  if (init_count_ == 0) {
-    groupSyncRead_->clearParam();
-    for (size_t i = 0; i < ARM_NUM; ++i) {
-      for (size_t j = 0; j < JOINT_NUM; ++j) {
-        groupSyncRead_->addParam(static_cast<uint8_t>(DXL_IDS[i][j]));
-      }
-    }
+// void DynamixelNode::align_dynamixel() {
+//   if (init_count_ == 0) {
+//     groupSyncRead_->clearParam();
+//     for (size_t i = 0; i < ARM_NUM; ++i) {
+//       for (size_t j = 0; j < JOINT_NUM; ++j) {
+//         groupSyncRead_->addParam(static_cast<uint8_t>(DXL_IDS[i][j]));
+//       }
+//     }
 
-    if (groupSyncRead_-> txRxPacket() != COMM_SUCCESS) {return;}
+//     if (groupSyncRead_-> txRxPacket() != COMM_SUCCESS) {return;}
 
-    for (size_t i = 0; i < ARM_NUM; ++i) {
-      for (size_t j = 0; j < JOINT_NUM; ++j) {
-        if (groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) {
-          int32_t ppr = groupSyncRead_->getData(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4);
-          init_read_ppr[i][j] = ppr;
-        } 
-        else { RCLCPP_WARN(get_logger(), "Motor ID %d not available for initial read", DXL_IDS[i][j]); }
-      }
-    }
+//     for (size_t i = 0; i < ARM_NUM; ++i) {
+//       for (size_t j = 0; j < JOINT_NUM; ++j) {
+//         if (groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) {
+//           int32_t ppr = groupSyncRead_->getData(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4);
+//           init_read_ppr[i][j] = ppr;
+//         } 
+//         else { RCLCPP_WARN(get_logger(), "Motor ID %d not available for initial read", DXL_IDS[i][j]); }
+//       }
+//     }
 
-    for (size_t i = 0; i < ARM_NUM; ++i) {
-      for (size_t j = 0; j < JOINT_NUM; ++j) {
-        arm_des_ppr[i][j] = rad_2_ppr(static_cast<int>(j), arm_init_rad_[i][j]);
-      }
-    }
-  }
+//     for (size_t i = 0; i < ARM_NUM; ++i) {
+//       for (size_t j = 0; j < JOINT_NUM; ++j) {
+//         arm_des_ppr[i][j] = rad_2_ppr(static_cast<int>(j), arm_init_rad_[i][j]);
+//       }
+//     }
+//   }
 
-  double alpha = static_cast<double>(init_count_) / init_count_max_;
-  if (alpha > 1.0) alpha = 1.0;
+//   double alpha = static_cast<double>(init_count_) / init_count_max_;
+//   if (alpha > 1.0) alpha = 1.0;
 
-  for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < JOINT_NUM; ++j) {
-      // linear
-      init_des_ppr[i][j] = static_cast<double>(init_read_ppr[i][j] + alpha * (arm_des_ppr[i][j] - init_read_ppr[i][j]));
-    }
-  }
+//   for (size_t i = 0; i < ARM_NUM; ++i) {
+//     for (size_t j = 0; j < JOINT_NUM; ++j) {
+//       // linear
+//       init_des_ppr[i][j] = static_cast<double>(init_read_ppr[i][j] + alpha * (arm_des_ppr[i][j] - init_read_ppr[i][j]));
+//     }
+//   }
 
-  groupSyncWrite_->clearParam();
+//   groupSyncWrite_->clearParam();
 
-  for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < JOINT_NUM; ++j) {
-      uint8_t param_goal[4] = {
-        DXL_LOBYTE(DXL_LOWORD(init_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_LOWORD(init_des_ppr[i][j])),
-        DXL_LOBYTE(DXL_HIWORD(init_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_HIWORD(init_des_ppr[i][j]))
-      };
-      groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal);
-    }
-  }
-  groupSyncWrite_->txPacket();
+//   for (size_t i = 0; i < ARM_NUM; ++i) {
+//     for (size_t j = 0; j < JOINT_NUM; ++j) {
+//       uint8_t param_goal[4] = {
+//         DXL_LOBYTE(DXL_LOWORD(init_des_ppr[i][j])),
+//         DXL_HIBYTE(DXL_LOWORD(init_des_ppr[i][j])),
+//         DXL_LOBYTE(DXL_HIWORD(init_des_ppr[i][j])),
+//         DXL_HIBYTE(DXL_HIWORD(init_des_ppr[i][j]))
+//       };
+//       groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal);
+//     }
+//   }
+//   groupSyncWrite_->txPacket();
 
-  if (++init_count_ >= init_count_max_) {
-    init_read_ = true;
-  }
-}
+//   if (++init_count_ >= init_count_max_) {
+//     init_read_ = true;
+//   }
+// }
 
 bool DynamixelNode::init_Dynamixel() {
   uint8_t dxl_error = 0;
@@ -253,10 +253,10 @@ bool DynamixelNode::init_Dynamixel() {
       }
 
       // Enable torque
-      // if (packetHandler_->write1ByteTxRx(portHandler_, DXL_IDS[i][j], ADDR_TORQUE_ENABLE, 1, &dxl_error) != COMM_SUCCESS){
-      //   std::cerr << "Failed to enable torque for motor ID " << static_cast<int>(DXL_IDS[i][j]) << std::endl;
-      //   return false;
-      // }
+      if (packetHandler_->write1ByteTxRx(portHandler_, DXL_IDS[i][j], ADDR_TORQUE_ENABLE, 1, &dxl_error) != COMM_SUCCESS){
+        std::cerr << "Failed to enable torque for motor ID " << static_cast<int>(DXL_IDS[i][j]) << std::endl;
+        return false;
+      }
 
       // Set gain tune
       const Gains& g = setGains[j];
