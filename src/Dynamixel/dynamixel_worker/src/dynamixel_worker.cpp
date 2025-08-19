@@ -12,6 +12,7 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
 {
   // Create ROS2 subscriber for joint values
   joint_val_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("/joint_cmd", 1, std::bind(&DynamixelNode::armchanger_callback, this, std::placeholders::_1));
+  watchdog_subscription_ = this->create_subscription<watchdog_interfaces::msg::NodeState>("watchdog_state", 1, std::bind(&DynamixelNode::watchdogCallback, this, std::placeholders::_1));
 
   // Create ROS2 publishers for heartbeat and motor positions
   heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/dynamixel_state", 1);
@@ -301,6 +302,14 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
     for (size_t j = 0; j < JOINT_NUM; ++j) {
       arm_des_ppr[i][j] = rad_2_ppr(static_cast<int>(j), arm_des_rad[i][j]);
     }
+  }
+}
+
+void DynamixelNode::watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg){
+  bool is_ok = msg->state==13; // Watchdog update (state must be 13.)
+  // currently do nothing
+  if (!is_ok){
+    RCLCPP_INFO(this->get_logger(), "\n >> KILL ACTIVATED BY WATCHDOG. [DYNAMIXEL] <<\n");
   }
 }
 

@@ -101,21 +101,26 @@ public:
   bool init_Dynamixel();
 
 private:
-  void Dynamixel_Write_Read();
-  void Mujoco_Pub();
   void armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg);
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
+  void watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg);
+  
+  void Dynamixel_Write_Read();
+  void Mujoco_Pub();
   void change_position_gain(uint8_t dxl_id, uint16_t p_gain, uint16_t i_gain, uint16_t d_gain);
   void change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16_t i_gain);
   void heartbeat_timer_callback();
   void align_dynamixel();
-
+  
   // ROS2 communication
   rclcpp::Subscription<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_val_subscriber_;
   rclcpp::Subscription<mujoco_interfaces::msg::MuJoCoMeas>::SharedPtr mujoco_subscriber_;
+  rclcpp::Subscription<watchdog_interfaces::msg::NodeState>::SharedPtr watchdog_subscription_;
+
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr pos_write_publisher_;
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr pos_mea_publisher_;
+
   rclcpp::TimerBase::SharedPtr motor_timer_;
   rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
