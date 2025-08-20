@@ -13,7 +13,6 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <algorithm>
-#include <array>
 
 class AllocatorWorker : public rclcpp::Node {
 public:
@@ -25,6 +24,10 @@ private:
   void jointValCallback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg);
   void heartbeat_timer_callback();
   void debugging_timer_callback();
+  void start_allcation();
+
+  Eigen::Matrix4d calc_A1(const Eigen::Vector4d& C1);
+  Eigen::Matrix4d calc_A2(const Eigen::Vector4d& C2s);
 
   // Subscribers
   rclcpp::Subscription<controller_interfaces::msg::ControllerOutput>::SharedPtr controller_subscriber_;
@@ -53,14 +56,16 @@ private:
   const double pwm_alpha_ = 46.5435;  // F = a * pwm^2 + b
   const double pwm_beta_  = 8.6111;   // F = a * pwm^2 + b
   const double zeta       = 0.21496;  // b/k constant
-  Eigen::Vector4d zeta_;
 
   // Control Allocation params
   Eigen::Matrix<double,6,4> DH_params_; // 6x4 DH table (rows: link 0..5; cols: a, alpha, d, theta0)
   Eigen::Vector4d q_B0_;                // Body to Arm rotation angle in z axis [rad]
   Eigen::Vector4d C1_;                  // calculated thrust f_1234 [N]
-  Eigen::Vector4d C2_;                  // calculated tilted angle [rad]
+  Eigen::Vector4d C2_mea_;              // FK calculated tilted angle [rad]
+  Eigen::Vector4d C2_des_;              // calculated tilted angle [rad]
+  Eigen::Matrix<double, 3, 4> r_mea_;   // FK calculated position vect of each arm [m]
   Eigen::Vector4d pwm_;                 // calculated pwm [0.0 ~ 1.0]
+  Eigen::Vector3d Pc_;                  // CoM bias vector wrt. body frame [m]
   
   // yaw-wrench conversion params
   const double lpf_alpha_ = 0.01;
@@ -81,23 +86,13 @@ private:
     {0., -0.84522, 1.50944, 0.90812, 0.},   // a2_mea
     {0., -0.84522, 1.50944, 0.90812, 0.},   // a3_mea
     {0., -0.84522, 1.50944, 0.90812, 0.}};  // a4_mea
-
-  // ---------- Tilt assist parameters (declare in ctor as ROS params) ----------
-  double tilt_limit_rad_        = 0.17;  // [rad]
-  double tilt_rate_limit_rad_s_ = 0.1;   // [rad/s]
-  double yaw_eps_               = 0.1;  // [Nm]
-  double w_fx_                  = 0.1;
-  double w_fy_                  = 0.1;
-  double w_mz_                  = 1.0;
-  double lambda_tilt_           = 1e-4;
-  int    tilt_joint_index_      = 5;     // DH index (0..5) of tilt joint
-  int    tilt_axis_index_       = 2;     // 0:x,1:y,2:z (joint frame)
-
   
   // heartbeat state  
-  uint8_t  hb_state_;     // current heartbeat value
-  bool     hb_enabled_;   // gate flag
-  uint8_t  heartbeat_state_; // previous node state
+  uint8_t  hb_state_;         // current heartbeat value
+  bool     hb_enabled_;       // gate flag
+  uint8_t  heartbeat_state_;  // previous node state
+
+  bool     allocator_run_;    // allocator starting flag
 
   // ------- math utils -------
   static inline Eigen::Matrix4d compute_DH(double a, double alpha, double d, double theta) {
@@ -109,13 +104,8 @@ private:
     return T;
   }
 
-  static inline Eigen::Matrix3d skew(const Eigen::Vector3d& v) {
-    return (Eigen::Matrix3d() << 
-              0.0,   -v.z(),  v.y(),
-              v.z(),  0.0,   -v.x(),
-             -v.y(),  v.x(),  0.0
-            ).finished();
-  }
+  const double inv_sqrt2 = 0.7071067811865474617150084668537601828575;  // 1/sqrt(2)
+  const double sqrt2 = 1.4142135623730951454746218587388284504414;      // sqrt(2)
 };
 
 #endif // ALLOCATOR_WORKER_HPP
