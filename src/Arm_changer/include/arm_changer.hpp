@@ -62,7 +62,8 @@ private:
   // Watchdog state
   bool kill_activated_ = true;
 
-  double tilted_rad = 0.0872665; // 5 deg
+  double tilted_rad = 0.2; // 5 deg
+  // double tilted_rad = 0.0872665; // 5 deg
   Eigen::Vector4d C2_;           // calculated tilted angle [rad]
 
   // path_check

@@ -63,7 +63,7 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   double tauz_r = Wrench(2) - tauz_bar_;
   double tauz_r_sat = std::clamp(tauz_r, tauz_min, tauz_max);
   double tauz_t = tauz_bar_ + tauz_r - tauz_r_sat;
-  RCLCPP_INFO(this->get_logger(), ">> %f\t%f<<", tauz_r_sat, tauz_t);
+  // RCLCPP_INFO(this->get_logger(), ">>%f\t%f\t%f\t%f<<", Wrench(2), tauz_r_sat, tauz_t, Wrench(2)-tauz_r_sat-tauz_t);
   
   Eigen::Vector4d B1(Wrench(0), Wrench(1), tauz_r_sat, Wrench(3));
   Eigen::Matrix4d A1 = calc_A1(C2_mea_);
@@ -78,6 +78,8 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   Eigen::FullPivLU<Eigen::Matrix4d> lu_2(A2);
   if (lu_2.isInvertible()) {C2_des_ = lu_2.solve(B2);}
   else {C2_des_ = (A2.transpose()*A2 + 1e-8*Eigen::Matrix4d::Identity()).ldlt().solve(A2.transpose()*B2);}
+
+  // RCLCPP_INFO(this->get_logger(), ">>%f\t%f\t%f\t%f<<", C2_des_(0), C2_des_(1), C2_des_(2), C2_des_(3));
 
   // thrust -> pwm
   for (int i = 0; i < 4; ++i) {
