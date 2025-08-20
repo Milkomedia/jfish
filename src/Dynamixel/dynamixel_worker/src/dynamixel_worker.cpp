@@ -62,6 +62,8 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
 
     // Create timer for Write/Read motor positions
     motor_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), std::bind(&DynamixelNode::Mujoco_Pub, this));
+    
+    init_read_ = true;
   }
   else{
     RCLCPP_ERROR(this->get_logger(), "Unknown mode: %s. No initialization performed.", mode.c_str());

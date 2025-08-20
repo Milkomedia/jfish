@@ -68,7 +68,7 @@ private:
   Eigen::Vector3d Pc_;                  // CoM bias vector wrt. body frame [m]
   
   // yaw-wrench conversion params
-  const double lpf_alpha_ = 0.5;
+  const double lpf_alpha_ = 0.001;
   const double lpf_beta_  = 1.0 - lpf_alpha_;
   const double tauz_min   = -5.0; // saturation ref [Nm]
   const double tauz_max   =  5.0; // saturation ref [Nm]
