@@ -37,6 +37,10 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   Eigen::Vector3d heading2(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm2
   Eigen::Vector3d heading3(0.0, -std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm3
   Eigen::Vector3d heading4(0.0,  std::sin(tilted_rad), std::sqrt(1-std::sin(tilted_rad)*std::sin(tilted_rad))); // arm4
+  // Eigen::Vector3d heading1(0.0, std::sin(C_(0)), std::sqrt(1-std::sin(C_(0))*std::sin(C_(0)))); // arm1
+  // Eigen::Vector3d heading2(0.0, std::sin(C_(1)), std::sqrt(1-std::sin(C_(1))*std::sin(C_(1)))); // arm2
+  // Eigen::Vector3d heading3(0.0, std::sin(C_(2)), std::sqrt(1-std::sin(C_(2))*std::sin(C_(2)))); // arm3
+  // Eigen::Vector3d heading4(0.0, std::sin(C_(3)), std::sqrt(1-std::sin(C_(3))*std::sin(C_(3)))); // arm4
 
   auto [p1_des_base, heading1_base] = arm2base(pos_des_local, heading1, 1);
   auto [p2_des_base, heading2_base] = arm2base(pos_des_local, heading2, 2);

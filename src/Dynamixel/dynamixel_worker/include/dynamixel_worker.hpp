@@ -16,15 +16,17 @@
 #include <stdexcept>
 
 // Dynamixel Addresses
-#define ADDR_OPERATING_MODE      11
-#define ADDR_TORQUE_ENABLE       64
-#define ADDR_GOAL_POSITION       116
-#define ADDR_PRESENT_POSITION    132
-#define ADDR_POSITION_P_GAIN     84
-#define ADDR_POSITION_I_GAIN     82
-#define ADDR_POSITION_D_GAIN     80
-#define ADDR_VELOCITY_P_GAIN     78
-#define ADDR_VELOCITY_I_GAIN     76
+#define ADDR_OPERATING_MODE        11
+#define ADDR_TORQUE_ENABLE         64
+#define ADDR_GOAL_POSITION         116
+#define ADDR_PRESENT_POSITION      132
+#define ADDR_POSITION_P_GAIN       84
+#define ADDR_POSITION_I_GAIN       82
+#define ADDR_POSITION_D_GAIN       80
+#define ADDR_VELOCITY_P_GAIN       78
+#define ADDR_VELOCITY_I_GAIN       76
+#define ADDR_HARDWARE_ERROR_STATUS 70
+
 
 #define PROTOCOL_VERSION 2.0
 #define BAUDRATE         4000000
@@ -104,13 +106,14 @@ private:
   void armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg);
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
   void watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg);
-  
+
   void Dynamixel_Write_Read();
   void Mujoco_Pub();
   void change_position_gain(uint8_t dxl_id, uint16_t p_gain, uint16_t i_gain, uint16_t d_gain);
   void change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16_t i_gain);
   void heartbeat_timer_callback();
   void align_dynamixel();
+  bool check_shutdown();
   
   // ROS2 communication
   rclcpp::Subscription<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_val_subscriber_;
@@ -132,32 +135,26 @@ private:
 
   const size_t init_count_max_{500};
   size_t init_count_{0};
-  bool init_read_{false}; 
-  bool read_setting_{false};
 
-  const double arm_init_rad_[4][5] = { // [rad]
+  bool init_read_      {false}; 
+  bool first_cmd_      {false};
+  bool read_setting_   {false};
+  bool align_completed_{false}; 
+
+
+  double arm_des_rad[ARM_NUM][JOINT_NUM] = {}; // callback store [rad]
+  double arm_cmd[ARM_NUM][JOINT_NUM] = {};     // real servo cmd [ppr]
+  double first_cmd[ARM_NUM][JOINT_NUM] = {};   // first callback [rad]
+  double arm_mea[ARM_NUM][JOINT_NUM] = {       // mujoco or dynamixel read [rad]
     {0., 0.095993089, 0.67544228, 0.806341947, -tilted_rad},
     {0., 0.095993089, 0.67544228, 0.806341947,  tilted_rad},
     {0., 0.095993089, 0.67544228, 0.806341947, -tilted_rad},
     {0., 0.095993089, 0.67544228, 0.806341947,  tilted_rad}
   };
 
-  double init_read_ppr[ARM_NUM][JOINT_NUM] = {};
-  double arm_des_rad[ARM_NUM][JOINT_NUM] = {};
-  double arm_des_ppr[ARM_NUM][JOINT_NUM] = {};
-  double lpf_des_ppr[ARM_NUM][JOINT_NUM] = {};
-  double init_des_ppr[ARM_NUM][JOINT_NUM] = {};
-
-  // mujoco or dynamixel read
-  double arm_mea[4][5] = { // [rad]
-    {0., 0.095993089, 0.67544228, 0.806341947, -tilted_rad},
-    {0., 0.095993089, 0.67544228, 0.806341947,  tilted_rad},
-    {0., 0.095993089, 0.67544228, 0.806341947, -tilted_rad},
-    {0., 0.095993089, 0.67544228, 0.806341947,  tilted_rad}
-  };
 
   uint16_t dnmxl_err_cnt_ = 0;
-  
+
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
   bool     hb_enabled_;   // gate flag

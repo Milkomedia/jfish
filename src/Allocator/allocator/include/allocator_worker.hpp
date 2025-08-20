@@ -6,13 +6,14 @@
 #include "controller_interfaces/msg/controller_output.hpp"
 #include "allocator_interfaces/msg/tilt_angle_val.hpp"
 #include "allocator_interfaces/msg/pwm_val.hpp"
-#include "allocator_interfaces/msg/allocator_debug_val.hpp" //joint_val이 이안에 mea로 들어가짐 
+#include "allocator_interfaces/msg/allocator_debug_val.hpp" // joint_val이 이안에 mea로 들어가짐 
 #include "dynamixel_interfaces/msg/joint_val.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
 
 #include <Eigen/Dense>
 #include <vector>
 #include <algorithm>
+#include <array>
 
 class AllocatorWorker : public rclcpp::Node {
 public:
@@ -50,8 +51,8 @@ private:
   
   // BLDC Motor Model
   const double pwm_alpha_ = 46.5435;  // F = a * pwm^2 + b
-  const double pwm_beta_ = 8.6111;    // F = a * pwm^2 + b
-  const double zeta = 0.21496;        // b/k constant
+  const double pwm_beta_  = 8.6111;   // F = a * pwm^2 + b
+  const double zeta       = 0.21496;  // b/k constant
   Eigen::Vector4d zeta_;
 
   // Control Allocation params
@@ -59,7 +60,14 @@ private:
   Eigen::Vector4d q_B0_;                // Body to Arm rotation angle in z axis [rad]
   Eigen::Vector4d C1_;                  // calculated thrust f_1234 [N]
   Eigen::Vector4d C2_;                  // calculated tilted angle [rad]
-  Eigen::Vector4d pwm_;                 // calculated pwm [0.0 ~  0.1]
+  Eigen::Vector4d pwm_;                 // calculated pwm [0.0 ~ 1.0]
+  
+  // yaw-wrench conversion params
+  const double lpf_alpha_ = 0.01;
+  const double lpf_beta_  = 1.0 - lpf_alpha_;
+  const double tauz_min   = -5.0; // saturation ref [Nm]
+  const double tauz_max   =  5.0; // saturation ref [Nm]
+  double tauz_bar_ = 0.0;
 
   // arm pos [rad] (mujoco or dynamixel)
   double arm_des_[4][5] = {
@@ -74,25 +82,38 @@ private:
     {0., -0.84522, 1.50944, 0.90812, 0.},   // a3_mea
     {0., -0.84522, 1.50944, 0.90812, 0.}};  // a4_mea
 
+  // ---------- Tilt assist parameters (declare in ctor as ROS params) ----------
+  double tilt_limit_rad_        = 0.17;  // [rad]
+  double tilt_rate_limit_rad_s_ = 0.1;   // [rad/s]
+  double yaw_eps_               = 0.1;  // [Nm]
+  double w_fx_                  = 0.1;
+  double w_fy_                  = 0.1;
+  double w_mz_                  = 1.0;
+  double lambda_tilt_           = 1e-4;
+  int    tilt_joint_index_      = 5;     // DH index (0..5) of tilt joint
+  int    tilt_axis_index_       = 2;     // 0:x,1:y,2:z (joint frame)
+
+  
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
   bool     hb_enabled_;   // gate flag
-  uint8_t heartbeat_state_; // previous node state
+  uint8_t  heartbeat_state_; // previous node state
 
+  // ------- math utils -------
   static inline Eigen::Matrix4d compute_DH(double a, double alpha, double d, double theta) {
     Eigen::Matrix4d T;
-    T << cos(theta), -sin(theta) * cos(alpha),  sin(theta) * sin(alpha), a * cos(theta),
-        sin(theta),  cos(theta) * cos(alpha), -cos(theta) * sin(alpha), a * sin(theta),
-        0,           sin(alpha),              cos(alpha),              d,
-        0,           0,                        0,                      1;
+    T << std::cos(theta), -std::sin(theta) * std::cos(alpha),  std::sin(theta) * std::sin(alpha), a * std::cos(theta),
+         std::sin(theta),  std::cos(theta) * std::cos(alpha), -std::cos(theta) * std::sin(alpha), a * std::sin(theta),
+         0,                std::sin(alpha),                    std::cos(alpha),                   d,
+         0,                0,                                   0,                                 1;
     return T;
   }
 
   static inline Eigen::Matrix3d skew(const Eigen::Vector3d& v) {
-  return (Eigen::Matrix3d() << 
-            0.0,    -v.z(),  v.y(),
-            v.z(),   0.0,   -v.x(),
-            -v.y(),   v.x(),  0.0
+    return (Eigen::Matrix3d() << 
+              0.0,   -v.z(),  v.y(),
+              v.z(),  0.0,   -v.x(),
+             -v.y(),  v.x(),  0.0
             ).finished();
   }
 };

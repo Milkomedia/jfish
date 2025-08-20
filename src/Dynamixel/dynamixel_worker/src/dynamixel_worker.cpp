@@ -103,21 +103,26 @@ void DynamixelNode::Mujoco_Pub() {
 }
 
 void DynamixelNode::mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg) {
+  
   for (uint8_t j = 0; j < JOINT_NUM; ++j) {
     arm_mea[0][j] = msg->a1_q[j];
     arm_mea[1][j] = msg->a2_q[j];
     arm_mea[2][j] = msg->a3_q[j];
     arm_mea[3][j] = msg->a4_q[j];
   }
+
 }
+
 
 /* for real */
 void DynamixelNode::Dynamixel_Write_Read() {
 
-  // if (!init_read_) {
-  //   align_dynamixel();
-  //   return;
-  // }
+  if (!init_read_) {
+    align_dynamixel();
+    return;
+  }
+
+  if (check_shutdown()) return;
   
   /*  Write  */
   groupSyncWrite_->clearParam();
@@ -125,13 +130,14 @@ void DynamixelNode::Dynamixel_Write_Read() {
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j) {
       
-      lpf_des_ppr[i][j] = static_cast<int>(LPF_ALPHA * arm_des_ppr[i][j] + LPF_BETA * lpf_des_ppr[i][j]);
-  
+      arm_cmd[i][j] = LPF_ALPHA * arm_des_rad[i][j] + LPF_BETA * arm_cmd[i][j];
+
+      int32_t ppr_goal = rad_2_ppr(static_cast<int>(j), arm_cmd[i][j]);
       uint8_t param_goal_position[4] = {
-        DXL_LOBYTE(DXL_LOWORD(lpf_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_LOWORD(lpf_des_ppr[i][j])),
-        DXL_LOBYTE(DXL_HIWORD(lpf_des_ppr[i][j])),
-        DXL_HIBYTE(DXL_HIWORD(lpf_des_ppr[i][j]))
+        DXL_LOBYTE(DXL_LOWORD(ppr_goal)),
+        DXL_HIBYTE(DXL_LOWORD(ppr_goal)),
+        DXL_LOBYTE(DXL_HIWORD(ppr_goal)),
+        DXL_HIBYTE(DXL_HIWORD(ppr_goal))
       };
   
       if (!groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position)){dnmxl_err_cnt_++;}
@@ -179,66 +185,68 @@ void DynamixelNode::Dynamixel_Write_Read() {
     msg.a4_des[j] = arm_des_rad[3][j];  // Arm 4
   }
   pos_mea_publisher_->publish(msg);
+
+  if (dnmxl_err_cnt_ > 0) {
+    RCLCPP_WARN(this->get_logger(), "Dynamixel comm errors: %u", dnmxl_err_cnt_);
+  }
 }
 
+void DynamixelNode::align_dynamixel() {
+  
+  if (!first_cmd_) return;
 
-// void DynamixelNode::align_dynamixel() {
-//   if (init_count_ == 0) {
-//     groupSyncRead_->clearParam();
-//     for (size_t i = 0; i < ARM_NUM; ++i) {
-//       for (size_t j = 0; j < JOINT_NUM; ++j) {
-//         groupSyncRead_->addParam(static_cast<uint8_t>(DXL_IDS[i][j]));
-//       }
-//     }
+  if (!align_completed_) {
 
-//     if (groupSyncRead_-> txRxPacket() != COMM_SUCCESS) {return;}
+    groupSyncRead_->clearParam();
 
-//     for (size_t i = 0; i < ARM_NUM; ++i) {
-//       for (size_t j = 0; j < JOINT_NUM; ++j) {
-//         if (groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) {
-//           int32_t ppr = groupSyncRead_->getData(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4);
-//           init_read_ppr[i][j] = ppr;
-//         } 
-//         else { RCLCPP_WARN(get_logger(), "Motor ID %d not available for initial read", DXL_IDS[i][j]); }
-//       }
-//     }
+    for (size_t i = 0; i < ARM_NUM; ++i)
+      for (size_t j = 0; j < JOINT_NUM; ++j)
+        groupSyncRead_->addParam(DXL_IDS[i][j]);
 
-//     for (size_t i = 0; i < ARM_NUM; ++i) {
-//       for (size_t j = 0; j < JOINT_NUM; ++j) {
-//         arm_des_ppr[i][j] = rad_2_ppr(static_cast<int>(j), arm_init_rad_[i][j]);
-//       }
-//     }
-//   }
+    if (groupSyncRead_->txRxPacket() == COMM_SUCCESS) {
+      for (size_t i = 0; i < ARM_NUM; ++i) {
+        for (size_t j = 0; j < JOINT_NUM; ++j) {
+          if (groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) {
+            int32_t ppr = groupSyncRead_->getData(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4);
+            arm_mea[i][j] = ppr_2_rad(static_cast<int>(j), ppr);  // power-on first read ppr
+          } 
+          first_cmd[i][j] = arm_mea[i][j];     
+          arm_cmd[i][j]   = first_cmd[i][j]; 
+        }
+      }
+      align_completed_ = true;
+      init_count_ = 0;
+    } 
+    else {return;}
+  }
 
-//   double alpha = static_cast<double>(init_count_) / init_count_max_;
-//   if (alpha > 1.0) alpha = 1.0;
+  // linear interpolation
+  double alpha = static_cast<double>(init_count_) / init_count_max_;
+  if (alpha > 1.0) alpha = 1.0;
 
-//   for (size_t i = 0; i < ARM_NUM; ++i) {
-//     for (size_t j = 0; j < JOINT_NUM; ++j) {
-//       // linear
-//       init_des_ppr[i][j] = static_cast<double>(init_read_ppr[i][j] + alpha * (arm_des_ppr[i][j] - init_read_ppr[i][j]));
-//     }
-//   }
+  groupSyncWrite_->clearParam();
 
-//   groupSyncWrite_->clearParam();
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
+      double initial_cmd = (1.0 - alpha) * first_cmd[i][j] + alpha * arm_des_rad[i][j];
+      arm_cmd[i][j] = initial_cmd;
 
-//   for (size_t i = 0; i < ARM_NUM; ++i) {
-//     for (size_t j = 0; j < JOINT_NUM; ++j) {
-//       uint8_t param_goal[4] = {
-//         DXL_LOBYTE(DXL_LOWORD(init_des_ppr[i][j])),
-//         DXL_HIBYTE(DXL_LOWORD(init_des_ppr[i][j])),
-//         DXL_LOBYTE(DXL_HIWORD(init_des_ppr[i][j])),
-//         DXL_HIBYTE(DXL_HIWORD(init_des_ppr[i][j]))
-//       };
-//       groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal);
-//     }
-//   }
-//   groupSyncWrite_->txPacket();
+      int32_t ppr_goal = rad_2_ppr(static_cast<int>(j), initial_cmd);
+      uint8_t param_goal_position[4] = {
+        DXL_LOBYTE(DXL_LOWORD(ppr_goal)),
+        DXL_HIBYTE(DXL_LOWORD(ppr_goal)),
+        DXL_LOBYTE(DXL_HIWORD(ppr_goal)),
+        DXL_HIBYTE(DXL_HIWORD(ppr_goal))
+      };
+      if (!groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position)) dnmxl_err_cnt_++;
+    }
+  }
+  if (groupSyncWrite_->txPacket() != COMM_SUCCESS) dnmxl_err_cnt_++;
 
-//   if (++init_count_ >= init_count_max_) {
-//     init_read_ = true;
-//   }
-// }
+  if (++init_count_ >= init_count_max_) {
+    init_read_ = true;
+  }
+}
 
 bool DynamixelNode::init_Dynamixel() {
   uint8_t dxl_error = 0;
@@ -271,8 +279,39 @@ bool DynamixelNode::init_Dynamixel() {
   
   syncread_set(groupSyncRead_);
   read_setting_ = true;
+
+  (void)check_shutdown();
   
   return true;
+}
+
+bool DynamixelNode::check_shutdown() { // not running... comming soon //
+  
+  if (!portHandler_ || !packetHandler_) return false;
+
+  bool shutdown = false;
+  uint8_t dxl_error = 0;
+
+  for (size_t i = 0; i < ARM_NUM; ++i) {
+    for (size_t j = 0; j < JOINT_NUM; ++j) {
+
+      uint8_t hw_error = 0;
+      const int comm = packetHandler_->read1ByteTxRx(portHandler_, DXL_IDS[i][j], ADDR_HARDWARE_ERROR_STATUS, &hw_error, &dxl_error);
+      
+      if (comm == COMM_SUCCESS) {
+        if (hw_error != 0){
+          shutdown = true;
+          RCLCPP_ERROR(this->get_logger(), "[DXL ID %u] Hardware Error = 0x%02X", DXL_IDS[i][j], hw_error);
+        }
+     }
+    }
+  }
+
+  if (shutdown) {
+    hb_enabled_ = false;
+    RCLCPP_WARN(this->get_logger(), "DXL failed, heartbeat disabled!");
+  }
+  return shutdown;
 }
 
 void DynamixelNode::change_position_gain(uint8_t dxl_id, uint16_t p_gain, uint16_t i_gain, uint16_t d_gain) {
@@ -288,21 +327,21 @@ void DynamixelNode::change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16
   packetHandler_->write2ByteTxRx(portHandler_, dxl_id, ADDR_VELOCITY_I_GAIN, i_gain, &dxl_error);
 }
 
+
 /* for Both */
 void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg) {
   
+  if (!init_read_ && first_cmd_) return;
+
   for (uint8_t j = 0; j < JOINT_NUM; ++j) {
     arm_des_rad[0][j] = msg->a1_des[j];   // Arm 1
     arm_des_rad[1][j] = msg->a2_des[j];   // Arm 2
     arm_des_rad[2][j] = msg->a3_des[j];   // Arm 3
     arm_des_rad[3][j] = msg->a4_des[j];   // Arm 4
   }
-  
-  for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < JOINT_NUM; ++j) {
-      arm_des_ppr[i][j] = rad_2_ppr(static_cast<int>(j), arm_des_rad[i][j]);
-    }
-  }
+
+  if (!first_cmd_) first_cmd_ = true;
+
 }
 
 void DynamixelNode::watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg){

@@ -187,7 +187,7 @@ void TeensyNode::watchdogCallback(const watchdog_interfaces::msg::NodeState::Sha
       MUJOCO_overriding();
       publish_dummy_zeros_timer_ = this->create_wall_timer(std::chrono::milliseconds(3), std::bind(&TeensyNode::MUJOCO_overriding, this));
     }
-    RCLCPP_INFO(this->get_logger(), "\n >> KILL ACTIVATED BY WATCHDOG. <<\n");
+    RCLCPP_INFO(this->get_logger(), "\n >> KILL ACTIVATED BY WATCHDOG. [TEENSY] <<\n");
   }
 }
 
