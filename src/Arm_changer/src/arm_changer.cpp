@@ -10,6 +10,7 @@ ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
   // ROS2 Subscribers
   sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("/sbus_signal", 1, std::bind(&ArmChangerWorker::sbus_callback, this, std::placeholders::_1));
   killcmd_subscription_ = this->create_subscription<sbus_interfaces::msg::KillCmd>("sbus_kill", 1, std::bind(&ArmChangerWorker::killCmd_callback, this, std::placeholders::_1));
+  tilt_angle_val_subscription_ = this->create_subscription<allocator_interfaces::msg::TiltAngleVal>("tilt_cmd", 1, std::bind(&ArmChangerWorker::TiltAngle_callback, this, std::placeholders::_1));
 
   // ROS2 Publisher
   joint_publisher_ = this->create_publisher<dynamixel_interfaces::msg::JointVal>("/joint_cmd", 1);
@@ -81,11 +82,11 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   a4_q = compute_ik(x, y, z, heading4);
 
   //IK check------------------------------------------------------------------------------------------------------------------------------------------------
-  // if (!ik_check(a1_q, pos_des_local, heading1) || !ik_check(a2_q, pos_des_local, heading2) || !ik_check(a3_q, pos_des_local, heading3) || !ik_check(a4_q, pos_des_local, heading4)) {
-  //     hb_enabled_ = false;
-  //     RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
-  //     return;
-  // }
+  if (!ik_check(a1_q, pos_des_local, heading1) || !ik_check(a2_q, pos_des_local, heading2) || !ik_check(a3_q, pos_des_local, heading3) || !ik_check(a4_q, pos_des_local, heading4)) {
+      hb_enabled_ = false;
+      RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
+      return;
+  }
 
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
   joint_msg.a1_des = a1_q;
@@ -166,9 +167,9 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double pos_err = (pos_fk - pos_des).norm();
   const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
-  RCLCPP_WARN(this->get_logger(), "pos_err %f", pos_err);
-//&& (ang_err <= 0.01745);
-  return (pos_err <= 10.0);  //10mm & 1 deg 
+  RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
+
+  return (pos_err <= 1.0 && (ang_err <= 0.01745));  //1mm & 1 deg 
 }
 
 bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const{
