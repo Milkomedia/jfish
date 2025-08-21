@@ -47,7 +47,7 @@ private:
   const double a2_ = 115.;
   const double a3_ = 110.;
   const double a4_ = 24.;
-  const double a5_ = 104.; //68.0
+  const double a5_ = 68.; //68.0
     
   // workspace constrain
   const double x_min_   = 264.; 
@@ -62,8 +62,8 @@ private:
   // Watchdog state
   bool kill_activated_ = true;
 
-  double tilted_rad = 0.2; // 5 deg
-  // double tilted_rad = 0.0872665; // 5 deg
+  //double tilted_rad = 0.0;
+  //double tilted_rad = 0.0872665; // 5 deg
   Eigen::Vector4d C2_;           // calculated tilted angle [rad]
 
   // path_check

@@ -79,6 +79,9 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   if (lu_2.isInvertible()) {C2_des_ = lu_2.solve(B2);}
   else {C2_des_ = (A2.transpose()*A2 + 1e-8*Eigen::Matrix4d::Identity()).ldlt().solve(A2.transpose()*B2);}
 
+  // for safety
+  C2_des_ = C2_des_.cwiseMax(Eigen::Vector4d::Constant(-0.261799333)).cwiseMin(Eigen::Vector4d::Constant(0.261799333));
+
   // RCLCPP_INFO(this->get_logger(), ">>%f\t%f\t%f\t%f<<", C2_des_(0), C2_des_(1), C2_des_(2), C2_des_(3));
 
   // thrust -> pwm

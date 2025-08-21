@@ -77,15 +77,16 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
 
   //FK2IK---------------------------------------------------------------------------------------------------------------------------------------------------
   a1_q = compute_ik(x, y, z, heading1);
+  // RCLCPP_WARN(this->get_logger(), "xyz %f %f %f, a1_q %f %f %f %f %f", heading1(0),heading1(1),heading1(2),a1_q[0],a1_q[1],a1_q[2],a1_q[3],a1_q[4]);
   a2_q = compute_ik(x, y, z, heading2);
   a3_q = compute_ik(x, y, z, heading3);
   a4_q = compute_ik(x, y, z, heading4);
 
   //IK check------------------------------------------------------------------------------------------------------------------------------------------------
   if (!ik_check(a1_q, pos_des_local, heading1) || !ik_check(a2_q, pos_des_local, heading2) || !ik_check(a3_q, pos_des_local, heading3) || !ik_check(a4_q, pos_des_local, heading4)) {
-      hb_enabled_ = false;
-      RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
-      return;
+      // hb_enabled_ = false;
+      // RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
+      // return;
   }
 
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
@@ -167,9 +168,9 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double pos_err = (pos_fk - pos_des).norm();
   const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
-  RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
+  // RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
 
-  return (pos_err <= 1.0 && (ang_err <= 0.01745));  //1mm & 1 deg 
+  return (pos_err <= 5.0 && (ang_err <= 0.1745));  //5mm & 10 deg 
 }
 
 bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const{

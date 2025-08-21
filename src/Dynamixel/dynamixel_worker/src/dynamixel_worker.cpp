@@ -73,6 +73,7 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
   // initial handshake: immediately send 42 and enable subsequent heartbeat
   hb_state_   = 42;
   hb_enabled_ = true;
+  shit_ = false;
 }
 
 /* for sim */
@@ -124,8 +125,7 @@ void DynamixelNode::Dynamixel_Write_Read() {
     return;
   }
 
-  if (check_shutdown()) return;
-  
+  // if (check_shutdown()) return;
   /*  Write  */
   groupSyncWrite_->clearParam();
   
@@ -188,9 +188,9 @@ void DynamixelNode::Dynamixel_Write_Read() {
   }
   pos_mea_publisher_->publish(msg);
 
-  if (dnmxl_err_cnt_ > 0) {
-    RCLCPP_WARN(this->get_logger(), "Dynamixel comm errors: %u", dnmxl_err_cnt_);
-  }
+  // if (dnmxl_err_cnt_ > 0) {
+  //   RCLCPP_WARN(this->get_logger(), "Dynamixel comm errors: %u", dnmxl_err_cnt_);
+  // }
 }
 
 void DynamixelNode::align_dynamixel() {
@@ -282,7 +282,7 @@ bool DynamixelNode::init_Dynamixel() {
   syncread_set(groupSyncRead_);
   read_setting_ = true;
 
-  (void)check_shutdown();
+  // (void)check_shutdown();
   
   return true;
 }
@@ -332,7 +332,7 @@ void DynamixelNode::change_velocity_gain(uint8_t dxl_id, uint16_t p_gain, uint16
 
 /* for Both */
 void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg) {
-  
+
   if (!init_read_ && first_cmd_) return;
 
   for (uint8_t j = 0; j < JOINT_NUM; ++j) {
@@ -349,8 +349,9 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
 void DynamixelNode::watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg){
   bool is_ok = msg->state==13; // Watchdog update (state must be 13.)
   // currently do nothing
-  if (!is_ok){
+  if (!is_ok  && !shit_){
     RCLCPP_INFO(this->get_logger(), "\n >> KILL ACTIVATED BY WATCHDOG. [DYNAMIXEL] <<\n");
+    shit_ = true;
   }
 }
 

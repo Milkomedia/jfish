@@ -158,6 +158,7 @@ private:
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
   bool     hb_enabled_;   // gate flag
+  bool shit_;
 };
 
 #endif // DYNAMIXEL_WORKER_HPP
