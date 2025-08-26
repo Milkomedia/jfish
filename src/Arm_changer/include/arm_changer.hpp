@@ -1,15 +1,19 @@
-#ifndef ARM_CHANGER_HPP
-#define ARM_CHANGER_HPP
+#ifndef ARM_CHANGER_WORKER_HPP
+#define ARM_CHANGER_WORKER_HPP
 
 #include "rclcpp/rclcpp.hpp"
 #include "sbus_interfaces/msg/sbus_signal.hpp"
 #include "sbus_interfaces/msg/kill_cmd.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
-#include "allocator_interfaces/msg/tilt_angle_val.hpp"
 #include "dynamixel_interfaces/msg/joint_val.hpp"
+#include "controller_interfaces/msg/estimator_output.hpp"
+#include "allocator_interfaces/msg/tilt_angle_val.hpp"
 #include <array>
 #include <Eigen/Dense>
 #include <vector>
+#include <cmath>
+
+constexpr double half_sqrt2 = 1.4142135623730950488016887/2.0;
 
 class ArmChangerWorker : public rclcpp::Node {
 public:
@@ -20,56 +24,76 @@ private:
   // Callback to handle received PwmVal messages
   void sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void killCmd_callback(const sbus_interfaces::msg::KillCmd::SharedPtr msg);
-  void TiltAngle_callback(const allocator_interfaces::msg::TiltAngleVal::SharedPtr msg);
-  std::array<double, 5> compute_ik(const double x, const double y, const double z, const Eigen::Vector3d &heading);
+  void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg);
+  std::array<double,5> compute_ik(const Eigen::Vector3d &position, const Eigen::Vector3d &heading);
+  void estimator_callback(const controller_interfaces::msg::EstimatorOutput::SharedPtr msg);
+  void joint_callback();
   void heartbeat_timer_callback();
+  void TiltAngle_callback(const allocator_interfaces::msg::TiltAngleVal::SharedPtr msg);
 
   //check funtion
   bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const;
   bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const;
   bool collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const;
 
-  
   // Publishers
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_publisher_;
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
 
   // Subscribers
-  rclcpp::Subscription<allocator_interfaces::msg::TiltAngleVal>::SharedPtr tilt_angle_val_subscription_;
+  rclcpp::Subscription<controller_interfaces::msg::EstimatorOutput>::SharedPtr controller_subscription_;
   rclcpp::Subscription<sbus_interfaces::msg::KillCmd>::SharedPtr killcmd_subscription_;
   rclcpp::Subscription<sbus_interfaces::msg::SbusSignal>::SharedPtr sbus_subscription_;
+  rclcpp::Subscription<allocator_interfaces::msg::TiltAngleVal>::SharedPtr tilt_angle_val_subscription_;
 
   // Timers
+  rclcpp::TimerBase::SharedPtr joint_timer_;
   rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
-  // DH params
-  const double a1_ = 134.;
-  const double a2_ = 115.;
-  const double a3_ = 110.;
-  const double a4_ = 24.;
-  const double a5_ = 68.; //68.0
-    
-  // workspace constrain
-  const double x_min_   = 264.; 
-  const double x_max_   = 325.;
-  const double z_min_   = 186.;
-  const double z_max_   = 250.;
+  // CoM position
+  Eigen::Vector3d CoM_pos_ = Eigen::Vector3d::Zero();
+  const double lambda_ = 0.05;
+  double delta_x_ = 0;
+  double delta_y_ = 0;
 
-  // heartbeat state
+  // DH params
+  const double DH_a1_ = 134.;
+  const double DH_a2_ = 115.;
+  const double DH_a3_ = 110.;
+  const double DH_a4_ = 24.;
+  const double DH_a5_ = 68.;
+
+  // workspace constrain
+  double x_min_ = -50.0; 
+  double x_max_ =  50.0;
+  double y_min_ = -50.0;
+  double y_max_ =  50.0;  
+
+  Eigen::VectorXd a1_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
+  Eigen::VectorXd a2_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
+  Eigen::VectorXd a3_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
+  Eigen::VectorXd a4_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
+
+  //Tilt value
+  Eigen::Vector4d C2_;           // calculated tilted angle [rad]
+
+  // path_check
+  std::array<bool, 4> has_last_des_{};
+  std::array<rclcpp::Time, 4> last_des_time_;
+  std::array<Eigen::Vector3d, 4> last_des_pos_{
+    Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN()),
+    Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN()),
+    Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN()),
+    Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN())
+  };
+  
+  // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
   bool     hb_enabled_;   // gate flag
 
   // Watchdog state
+  uint8_t watchdog_state_ = 1; // default(normal) is 1.
   bool kill_activated_ = true;
-
-  //double tilted_rad = 0.0;
-  //double tilted_rad = 0.0872665; // 5 deg
-  Eigen::Vector4d C2_;           // calculated tilted angle [rad]
-
-  // path_check
-  bool has_last_des_ = false;
-  Eigen::Vector3d last_des_pos_{std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()};
-  rclcpp::Time last_des_time_;
 };
 
 
@@ -149,4 +173,4 @@ static inline bool OverLapped(const Eigen::Vector3d& a, const Eigen::Vector3d& b
   return false;
 }
 
-#endif // ARM_CHANGER_HPP
+#endif // ARM_CHANGER_WORKER_HPP

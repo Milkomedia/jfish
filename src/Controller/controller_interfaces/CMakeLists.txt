@@ -13,6 +13,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 set(msg_files
   "msg/ControllerOutput.msg"
   "msg/ControllerDebugVal.msg"
+  "msg/EstimatorOutput.msg"
 )
 
 # Generate interfaces

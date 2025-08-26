@@ -11,6 +11,7 @@
 
   <exec_depend>rclcpp</exec_depend>
   <exec_depend>Eigen3</exec_depend>
+  <exec_depend>controller_interfaces</exec_depend>
   <exec_depend>sbus_interfaces</exec_depend>
   <exec_depend>dynamixel_interfaces</exec_depend>
   <exec_depend>watchdog_interfaces</exec_depend>

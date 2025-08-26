@@ -1,0 +1,1 @@
+float64[3] com_pos  # xyz CoM bias [mm]
