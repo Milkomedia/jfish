@@ -169,7 +169,6 @@ static inline bool OverLapped(const Eigen::Vector3d& a, const Eigen::Vector3d& b
   const double ddistance = dx*dx + dy*dy;
 
   const double rrsum = (2.0 * R) * (2.0 * R);
-
   if (ddistance < rrsum && dz < T) return true;
   return false;
 }
