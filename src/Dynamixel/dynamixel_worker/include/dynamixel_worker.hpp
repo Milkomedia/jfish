@@ -87,14 +87,6 @@ inline double ppr_2_rad(int j, int32_t ppr) {
   return static_cast<double>( JointSign[j] * (ppr - 2048) * ppr2rad );
 }
 
-inline void syncread_set (dynamixel::GroupSyncRead* read_add_param) {
-  for (size_t i = 0; i < ARM_NUM; ++i) {
-    for (size_t j = 0; j < JOINT_NUM; ++j) {
-      read_add_param->addParam(static_cast<uint8_t>(DXL_IDS[i][j]));
-    }
-  }
-}
-
 
 class DynamixelNode : public rclcpp::Node {
 public:
@@ -106,10 +98,10 @@ private:
   void armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg);
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
   void watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg);
-  
   void Dynamixel_Write_Read();
-  void Mujoco_Pub();
+  void Dynamixel_Pub();
   void heartbeat_timer_callback();
+
   bool check_shutdown();
   
   // ROS2 communication
@@ -121,7 +113,7 @@ private:
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr pos_write_publisher_;
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr pos_mea_publisher_;
 
-  rclcpp::TimerBase::SharedPtr motor_timer_;
+  rclcpp::TimerBase::SharedPtr publisher_timer_;
   rclcpp::TimerBase::SharedPtr heartbeat_timer_;
   rclcpp::TimerBase::SharedPtr align_timer_;
 
@@ -131,10 +123,11 @@ private:
   dynamixel::GroupSyncWrite* groupSyncWrite_;
   dynamixel::GroupSyncRead*  groupSyncRead_;
 
-  const size_t init_count_max_{5000};
+  const size_t init_count_max_{500};
   size_t init_count_{0};
 
-  bool init_dxl_ {false}; 
+  bool init_dxl_  {false};
+  bool real_mode_ {false};
 
   double arm_des_rad[ARM_NUM][JOINT_NUM] = {}; // callback store [rad]
   double arm_cmd[ARM_NUM][JOINT_NUM] = {};     // real servo cmd [ppr]
@@ -145,12 +138,13 @@ private:
     {0., 0.095993089, 0.67544228, 0.806341947,  tilted_rad}
   };
 
-  uint16_t dnmxl_err_cnt_ = 0;
+  uint16_t dxl_error = 0;
+  uint32_t dnmxl_err_cnt_{0}; 
 
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
   bool     hb_enabled_;   // gate flag
-  bool shit_;
+  bool     shit_;
 };
 
 #endif // DYNAMIXEL_WORKER_HPP

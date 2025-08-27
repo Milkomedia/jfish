@@ -21,6 +21,7 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
 
   // Create timer for heartbeat
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&DynamixelNode::heartbeat_timer_callback, this));
+  publisher_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), std::bind(&DynamixelNode::Dynamixel_Pub, this));
 
   // mode-specific init
   this->declare_parameter<std::string>("mode", "None");
@@ -31,6 +32,8 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
     // Initialize PortHandler and PacketHandler using provided device name and protocol version
     portHandler_ = PortHandler::getPortHandler(device_name.c_str());
     packetHandler_ = PacketHandler::getPacketHandler(PROTOCOL_VERSION);
+
+    real_mode_ = true;
 
     // Open port and set baudrate
     if (!portHandler_->openPort()) {
@@ -58,10 +61,8 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
     // Create ROS2 subscriber for joint values
     mujoco_subscriber_ = this->create_subscription<mujoco_interfaces::msg::MuJoCoMeas>("mujoco_meas", 1, std::bind(&DynamixelNode::mujoco_callback, this, std::placeholders::_1));
 
-    // // Create timer for Write/Read motor positions
-    motor_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), std::bind(&DynamixelNode::Mujoco_Pub, this));
-    
     init_dxl_ = true;
+    real_mode_ = false;
   }
   else{
     RCLCPP_ERROR(this->get_logger(), "Unknown mode: %s. No initialization performed.", mode.c_str());
@@ -74,8 +75,8 @@ DynamixelNode::DynamixelNode(const std::string &device_name): Node("dynamixel_no
   shit_ = false;
 }
 
-/* for sim */
-void DynamixelNode::Mujoco_Pub() {
+/* for Both */
+void DynamixelNode::Dynamixel_Pub() {
   /*  Publish to mujoco  */
   dynamixel_interfaces::msg::JointVal msg1;
 
@@ -137,11 +138,14 @@ void DynamixelNode::Dynamixel_Write_Read() {
       };
 
       groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position);
-      // if (!groupSyncWrite_->addParam(DXL_IDS[i][j], param_goal_position)){dnmxl_err_cnt_++;}
     }
   }
 
-  groupSyncWrite_->txPacket();
+  // groupSyncWrite_->txPacket();
+  if (groupSyncWrite_->txPacket() != COMM_SUCCESS) {
+    dnmxl_err_cnt_++;
+    RCLCPP_WARN(this->get_logger(), "DXL failed2222");
+  }
 
 
   /*  Read  */
@@ -153,7 +157,6 @@ void DynamixelNode::Dynamixel_Write_Read() {
   }
 
   groupSyncRead_->txRxPacket();
-  // if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {dnmxl_err_cnt_++;}
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j) {
@@ -165,30 +168,29 @@ void DynamixelNode::Dynamixel_Write_Read() {
   }
 
   /*  Publish  */
-  dynamixel_interfaces::msg::JointVal msg;
+  // dynamixel_interfaces::msg::JointVal msg;
   
-  for (size_t j = 0; j < JOINT_NUM; ++j) {
-    msg.a1_mea[j] = arm_mea[0][j];  // Arm 1
-    msg.a2_mea[j] = arm_mea[1][j];  // Arm 2
-    msg.a3_mea[j] = arm_mea[2][j];  // Arm 3
-    msg.a4_mea[j] = arm_mea[3][j];  // Arm 4
+  // for (size_t j = 0; j < JOINT_NUM; ++j) {
+  //   msg.a1_mea[j] = arm_mea[0][j];  // Arm 1
+  //   msg.a2_mea[j] = arm_mea[1][j];  // Arm 2
+  //   msg.a3_mea[j] = arm_mea[2][j];  // Arm 3
+  //   msg.a4_mea[j] = arm_mea[3][j];  // Arm 4
 
-    msg.a1_des[j] = arm_des_rad[0][j];  // Arm 1
-    msg.a2_des[j] = arm_des_rad[1][j];  // Arm 2
-    msg.a3_des[j] = arm_des_rad[2][j];  // Arm 3
-    msg.a4_des[j] = arm_des_rad[3][j];  // Arm 4
-  }
-  pos_mea_publisher_->publish(msg);
+  //   msg.a1_des[j] = arm_des_rad[0][j];  // Arm 1
+  //   msg.a2_des[j] = arm_des_rad[1][j];  // Arm 2
+  //   msg.a3_des[j] = arm_des_rad[2][j];  // Arm 3
+  //   msg.a4_des[j] = arm_des_rad[3][j];  // Arm 4
+  // }
+  // pos_mea_publisher_->publish(msg);
 
-  if (dnmxl_err_cnt_ > 0) {
-    RCLCPP_WARN(this->get_logger(), "Dynamixel comm errors: %u", dnmxl_err_cnt_);
-  }
+  if (dnmxl_err_cnt_ > 0) { RCLCPP_WARN(this->get_logger(), "Dynamixel comm errors: %u", dnmxl_err_cnt_); }
 }
 
 
 bool DynamixelNode::init_Dynamixel() {
+  
   uint8_t dxl_error = 0;
-
+  
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j) {
 
@@ -217,38 +219,47 @@ bool DynamixelNode::init_Dynamixel() {
 
   groupSyncWrite_ = new GroupSyncWrite(portHandler_, packetHandler_, ADDR_GOAL_POSITION,    4);
   groupSyncRead_  = new GroupSyncRead (portHandler_, packetHandler_, ADDR_PRESENT_POSITION, 4);
-  
-  // Align Read //
-  groupSyncRead_->clearParam();
+
+  (void)check_shutdown();
+
+  /*  Align Read */
+  groupSyncRead_->clearParam();  // clear buffer, ID register
 
   for (size_t i = 0; i < ARM_NUM; ++i)
     for (size_t j = 0; j < JOINT_NUM; ++j)
       groupSyncRead_->addParam(DXL_IDS[i][j]);
 
-  if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) { dnmxl_err_cnt_++; return false; }
+  if (groupSyncRead_->txRxPacket() != COMM_SUCCESS) {  // send read request
+    dnmxl_err_cnt_++; 
+    RCLCPP_WARN(this->get_logger(), "DXL failed!!");
+  }
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j) {
 
-      if (!groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) { dnmxl_err_cnt_++; return false; }
+      if (!groupSyncRead_->isAvailable(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4)) {  // validate read data
+        dnmxl_err_cnt_++; 
+        RCLCPP_WARN(this->get_logger(), "DXL is not AVAILABLE!!");
+      }
       
       int ppr = groupSyncRead_->getData(DXL_IDS[i][j], ADDR_PRESENT_POSITION, 4);
 
       arm_mea[i][j] = ppr_2_rad(static_cast<int>(j), ppr);
-      arm_cmd[i][j] = arm_mea[i][j]; // start = current mea
+      arm_cmd[i][j] = arm_mea[i][j];
       arm_des_rad[i][j] = arm_mea[i][j];
 
     }
   }
 
-  // Align Write //
+  /*  Align Write  */
   init_count_ = 0;
 
-  align_timer_ = this->create_wall_timer(
-    std::chrono::milliseconds(10),
-    [this]() {
-      double alpha = static_cast<double>(init_count_) / static_cast<double>(init_count_max_);
-      if (alpha > 1.0) alpha = 1.0;
+  align_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), [this]() {  // only align timer 10ms 500 step -> 5s
+
+      // LERP
+      double alpha = static_cast<double>(init_count_) / static_cast<double>(init_count_max_);  
+      // alpha=0 : current pos -> alpha=1 : goal pos
+      if (alpha > 1.0) alpha = 1.0; 
 
       groupSyncWrite_->clearParam();
 
@@ -265,19 +276,17 @@ bool DynamixelNode::init_Dynamixel() {
             DXL_HIBYTE(DXL_HIWORD(ppr_goal))
           };
 
-          if (!groupSyncWrite_->addParam(DXL_IDS[i][j], init_goal_position)) {
-            dnmxl_err_cnt_++;
+          groupSyncWrite_->addParam(DXL_IDS[i][j], init_goal_position);
+
           }
         }
-      }
 
-      if (groupSyncWrite_->txPacket() != COMM_SUCCESS) {dnmxl_err_cnt_++;}
+      groupSyncWrite_->txPacket();
 
       ++init_count_;
       if (init_count_ >= init_count_max_) {
         align_timer_.reset();
         init_dxl_ = true;
-        // (void)check_shutdown();
       }
     }
   );
@@ -290,29 +299,25 @@ bool DynamixelNode::check_shutdown() {
   
   if (!portHandler_ || !packetHandler_) return false;
 
-  bool shutdown = false;
   uint8_t dxl_error = 0;
+  uint8_t hw_error  = 0;  // not error -> status 0
 
   for (size_t i = 0; i < ARM_NUM; ++i) {
     for (size_t j = 0; j < JOINT_NUM; ++j) {
 
-      uint8_t hw_error = 0;
       const int comm = packetHandler_->read1ByteTxRx(portHandler_, DXL_IDS[i][j], ADDR_HARDWARE_ERROR_STATUS, &hw_error, &dxl_error);
       
-      if (comm == COMM_SUCCESS) {
-        if (hw_error != 0){
-          shutdown = true;
-          RCLCPP_ERROR(this->get_logger(), "[DXL ID %u] Hardware Error = 0x%02X", DXL_IDS[i][j], hw_error);
-        }
-     }
+      if (comm == COMM_SUCCESS && hw_error != 0) {
+        RCLCPP_ERROR(this->get_logger(), "[DXL ID %u] Hardware Error = 0x%02X", DXL_IDS[i][j], hw_error);
+
+        hb_enabled_ = false;
+        RCLCPP_WARN(this->get_logger(), "DXL failed, heartbeat disabled!");
+        return true;
+      }
     }
   }
 
-  if (shutdown) {
-    hb_enabled_ = false;
-    RCLCPP_WARN(this->get_logger(), "DXL failed, heartbeat disabled!");
-  }
-  return shutdown;
+  return false;
 }
 
 /* for Both */
@@ -325,13 +330,14 @@ void DynamixelNode::armchanger_callback(const dynamixel_interfaces::msg::JointVa
     arm_des_rad[3][j] = msg->a4_des[j];   // Arm 4
   }
 
-  Dynamixel_Write_Read(); // only by callback
+  if (real_mode_) { Dynamixel_Write_Read(); }
 
 }
 
 void DynamixelNode::watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg){
   bool is_ok = msg->state==13; // Watchdog update (state must be 13.)
   // currently do nothing
+  // what i do ? T_T
   if (!is_ok  && !shit_){
     RCLCPP_INFO(this->get_logger(), "\n >> KILL ACTIVATED BY WATCHDOG. [DYNAMIXEL] <<\n");
     shit_ = true;
