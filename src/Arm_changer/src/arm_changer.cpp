@@ -9,7 +9,7 @@ inline double map_value(double input, double in_min, double in_max, double out_m
 ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
   // ROS2 Subscribers
   controller_subscription_ = this->create_subscription<controller_interfaces::msg::EstimatorOutput>("/estimator_output", 1, std::bind(&ArmChangerWorker::estimator_callback, this, std::placeholders::_1));
-  // sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("/sbus_signal", 1, std::bind(&ArmChangerWorker::sbus_callback, this, std::placeholders::_1));
+  sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("/sbus_signal", 1, std::bind(&ArmChangerWorker::sbus_callback, this, std::placeholders::_1));
   killcmd_subscription_ = this->create_subscription<sbus_interfaces::msg::KillCmd>("sbus_kill", 1, std::bind(&ArmChangerWorker::killCmd_callback, this, std::placeholders::_1));
   tilt_angle_val_subscription_ = this->create_subscription<allocator_interfaces::msg::TiltAngleVal>("tilt_cmd", 1, std::bind(&ArmChangerWorker::TiltAngle_callback, this, std::placeholders::_1));
 
@@ -29,7 +29,7 @@ ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
 void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {
   double delta_x_manual = map_value(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_);
   double delta_y_manual = map_value(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_);
-  RCLCPP_INFO(this->get_logger(), "x: %.4f, y: %.4f", delta_x_manual, delta_y_manual);  
+  //RCLCPP_INFO(this->get_logger(), "x: %.4f, y: %.4f", delta_x_manual, delta_y_manual);  
   
   //heading angle [rad]
   Eigen::Vector3d heading1(0.0, std::sin(C2_(0)), std::sqrt(1-std::sin(C2_(0))*std::sin(C2_(0)))); // arm1
@@ -38,16 +38,18 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   Eigen::Vector3d heading4(0.0, std::sin(C2_(3)), std::sqrt(1-std::sin(C2_(3))*std::sin(C2_(3)))); // arm4
 
   //arm postion [mm]
-  Eigen::Vector3d arm_position1(-280.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(-delta_x_manual+delta_y_manual),  150.0); //arm1
-  Eigen::Vector3d arm_position2(-280.0 + half_sqrt2*(-delta_x_manual+delta_y_manual),   half_sqrt2*(+delta_x_manual+delta_y_manual),  150.0); //arm1
-  Eigen::Vector3d arm_position3(-280.0 + half_sqrt2*(+delta_x_manual+delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  150.0); //arm1
-  Eigen::Vector3d arm_position4(-280.0 + half_sqrt2*(+delta_x_manual-delta_y_manual),   half_sqrt2*(-delta_x_manual-delta_y_manual),  150.0); //arm1
+  Eigen::Vector3d arm_position1(280.0 + half_sqrt2*(+delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual+delta_y_manual),  180.0); //arm1
+  Eigen::Vector3d arm_position2(280.0 + half_sqrt2*(+delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual+delta_y_manual),  180.0); //arm2
+  Eigen::Vector3d arm_position3(280.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  180.0); //arm3
+  Eigen::Vector3d arm_position4(280.0 + half_sqrt2*(-delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual-delta_y_manual),  180.0); //arm4
+
+
 
   //Base(J1) 2 Body(base)
-  auto [arm_position1_body, heading1_body] = arm2base(arm_position1, heading1, 1);
-  auto [arm_position2_body, heading2_body] = arm2base(arm_position2, heading2, 2);
-  auto [arm_position3_body, heading3_body] = arm2base(arm_position3, heading3, 3);
-  auto [arm_position4_body, heading4_body] = arm2base(arm_position4, heading4, 4);
+  auto [arm_position1_body, heading1_body] = arm2body(arm_position1, heading1, 1);
+  auto [arm_position2_body, heading2_body] = arm2body(arm_position2, heading2, 2);
+  auto [arm_position3_body, heading3_body] = arm2body(arm_position3, heading3, 3);
+  auto [arm_position4_body, heading4_body] = arm2body(arm_position4, heading4, 4);
 
   //Collision check (Body frame) 
   if (!collision_check(arm_position1_body, arm_position2_body, arm_position3_body, arm_position4_body)) {
@@ -93,9 +95,9 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
 
   //IK check
   if (!ik_check(a1_radians, arm_position1, heading1) || !ik_check(a2_radians, arm_position2, heading2) || !ik_check(a3_radians, arm_position3, heading3) || !ik_check(a4_radians, arm_position4, heading4)) {
-      // hb_enabled_ = false;
-      // RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
-      // return;
+      hb_enabled_ = false;
+      RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
+      return;
   }
 
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
@@ -142,47 +144,93 @@ void ArmChangerWorker::estimator_callback(const controller_interfaces::msg::Esti
   // std::memcpy(a4_q_.data(), a4_radians.data(), a4_radians.size()*sizeof(double));
 }
 
-std::array<double,5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &position, const Eigen::Vector3d &heading){
-  Eigen::Vector3d p05 = position;
-  Eigen::Vector3d p04 = p05 - DH_a5_ * heading;
+// std::array<double,5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &position, const Eigen::Vector3d &heading){
+//   Eigen::Vector3d p05 = position;
+//   Eigen::Vector3d p04 = p05 - DH_a5_ * heading;
 
-  double th1 = -std::atan2(p04(0), p04(1)) - M_PI / 2;
+//   double th1 = -std::atan2(p04(0), p04(1)) - M_PI / 2;
 
-  double n = p04(1) * heading(0) - p04(0) * heading(1);
-  double th5 = std::acos(std::abs(n) / std::sqrt(std::pow(p04(1), 2) + std::pow(p04(0), 2)));
-  if (th5 <= M_PI / 2) th5 -= M_PI / 2;
-  if (p04(0) * p05(1) - p04(1) * p05(0) > 0) th5 = -th5;
+//   double n = p04(1) * heading(0) - p04(0) * heading(1);
+//   double th5 = std::acos(std::abs(n) / std::sqrt(std::pow(p04(1), 2) + std::pow(p04(0), 2)));
+//   if (th5 <= M_PI / 2) th5 -= M_PI / 2;
+//   if (p04(0) * p05(1) - p04(1) * p05(0) > 0) th5 = -th5;
 
-  double cos_1 = std::cos(th1);
-  double sin_1 = std::sin(th1);
-  Eigen::Vector3d heading_projected = heading - std::sin(th5) * Eigen::Vector3d(sin_1, -cos_1, 0);
-  Eigen::Vector3d p34 = DH_a4_ * heading_projected / heading_projected.norm();
-  Eigen::Vector3d p03 = p04 - p34;
+//   double cos_1 = std::cos(th1);
+//   double sin_1 = std::sin(th1);
+//   Eigen::Vector3d heading_projected = heading - std::sin(th5) * Eigen::Vector3d(sin_1, -cos_1, 0);
+//   Eigen::Vector3d p34 = DH_a4_ * heading_projected / heading_projected.norm();
+//   Eigen::Vector3d p03 = p04 - p34;
 
-  Eigen::Vector3d p01(-DH_a1_ * cos_1, -DH_a1_ * sin_1, 0);
-  double x_prime = std::sqrt(std::pow(p01(0) - p03(0), 2) + std::pow(p01(1), 2));
-  double y_prime = p03(2);
-  double xy_sqr_sum = std::pow(x_prime, 2) + std::pow(y_prime, 2);
+//   Eigen::Vector3d p01(-DH_a1_ * cos_1, -DH_a1_ * sin_1, 0);
+//   double x_prime = std::sqrt(std::pow(p01(0) - p03(0), 2) + std::pow(p01(1), 2));
+//   double y_prime = p03(2);
+//   double xy_sqr_sum = std::pow(x_prime, 2) + std::pow(y_prime, 2);
 
-  double cos_3 = (xy_sqr_sum - (DH_a2_ * DH_a2_ + DH_a3_ * DH_a3_)) / (2 * DH_a2_ * DH_a3_);
-  double sin_3 = std::sqrt(1 - std::pow(cos_3, 2));
-  double th3 = -std::acos(cos_3);
+//   double cos_3 = (xy_sqr_sum - (DH_a2_ * DH_a2_ + DH_a3_ * DH_a3_)) / (2 * DH_a2_ * DH_a3_);
+//   double sin_3 = std::sqrt(1 - std::pow(cos_3, 2));
+//   double th3 = -std::acos(cos_3);
 
-  double th2;
-  if (p03(0) < p01(0)) {th2 = -std::atan2(y_prime, x_prime) + std::atan2(DH_a3_ * sin_3, DH_a2_ + DH_a3_ * cos_3);    }
-  else                 {th2 = std::atan2(y_prime, x_prime) + std::atan2(DH_a3_ * sin_3, DH_a2_ + DH_a3_ * cos_3) - M_PI;}
+//   double th2;
+//   if (p03(0) < p01(0)) {th2 = -std::atan2(y_prime, x_prime) + std::atan2(DH_a3_ * sin_3, DH_a2_ + DH_a3_ * cos_3);    }
+//   else                 {th2 = std::atan2(y_prime, x_prime) + std::atan2(DH_a3_ * sin_3, DH_a2_ + DH_a3_ * cos_3) - M_PI;}
 
-  double cos_2 = std::cos(th2);
-  Eigen::Vector3d p02 = p01 - DH_a2_ * Eigen::Vector3d(cos_2 * cos_1, cos_2 * sin_1, std::sin(th2));
-  Eigen::Vector3d p32 = p02 - p03;
+//   double cos_2 = std::cos(th2);
+//   Eigen::Vector3d p02 = p01 - DH_a2_ * Eigen::Vector3d(cos_2 * cos_1, cos_2 * sin_1, std::sin(th2));
+//   Eigen::Vector3d p32 = p02 - p03;
 
-  double cos_4 = std::clamp(p32.dot(p34) / (DH_a3_ * DH_a4_), -1.0, 1.0);
-  double th4 = M_PI - std::acos(cos_4);
-  if (std::abs(cos_4) == 1) th4 = 0.0;
+//   double cos_4 = std::clamp(p32.dot(p34) / (DH_a3_ * DH_a4_), -1.0, 1.0);
+//   double th4 = M_PI - std::acos(cos_4);
+//   if (std::abs(cos_4) == 1) th4 = 0.0;
 
-  double th4_ref = std::atan2(p34(2), p34(0)) - std::atan2(p32(2), p32(0));
-  if (th4_ref < 0) th4_ref += 2 * M_PI;
-  if (th4_ref > M_PI) th4 = -th4;
+//   double th4_ref = std::atan2(p34(2), p34(0)) - std::atan2(p32(2), p32(0));
+//   if (th4_ref < 0) th4_ref += 2 * M_PI;
+//   if (th4_ref > M_PI) th4 = -th4;
+//   RCLCPP_WARN(this->get_logger(), "%f %f %f %f %f", th1, th2, th3, th4, th5);
+//   return {th1, th2, th3, th4, th5};
+// }
+
+std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, const Eigen::Vector3d &heading_input){
+  Eigen::Vector3d heading = heading_input.normalized();  // Normalize
+    const double a1_ = 134.;
+  const double a2_ = 115.;
+  const double a3_ = 110.;
+  const double a4_ = 24.;
+  const double a5_ = 68.;
+  //Eigen::Vector3d p05(x, y, z);
+  Eigen::Vector3d p04 = p05 - a5_ * heading;
+  Eigen::Vector3d p03 = p04 - a4_ * heading;
+
+  // θ1
+  double th1 = std::atan2(p03(1), p03(0));
+
+  Eigen::Vector3d p01(a1_ * std::cos(th1), a1_ * std::sin(th1), 0);
+  Eigen::Vector3d p31 = p03 - p01;
+  double r = std::sqrt(std::pow(p31(0), 2) + std::pow(p31(1), 2));
+  double s = p31(2);
+
+  // θ3
+  double D = (r * r + s * s - a2_ * a2_ - a3_ * a3_) / (2 * a2_ * a3_);
+  D = std::clamp(D, -1.0, 1.0);
+  double th3 = std::acos(D);
+
+  // θ2
+  double alpha = std::atan2(s, r);
+  double beta = std::atan2(a3_ * std::sin(th3), a2_ + a3_ * std::cos(th3));
+  double th2 = alpha - beta;
+
+  // θ4
+  Eigen::Matrix3d R03 = R01(th1) * R12(th2) * R23(th3);
+  Eigen::Vector3d x3 = R03.col(0);
+  Eigen::Vector3d x4_desired = (p04 - p03).normalized();
+  double th4 = std::acos(std::clamp(x3.dot(x4_desired), -1.0, 1.0));
+
+  // θ5
+  Eigen::Matrix3d R04 = R03 * R34(th4);
+  Eigen::Vector3d x4 = R04.col(0);
+  Eigen::Vector3d cross = x4.cross(heading);
+  double sign = std::copysign(1.0, R04.col(2).dot(cross));
+  double dot = std::clamp(x4.dot(heading), -1.0, 1.0);
+  double th5 = sign * std::acos(dot);
 
   return {th1, th2, th3, th4, th5};
 }
@@ -204,7 +252,7 @@ bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Ve
 
 bool ArmChangerWorker::path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const{
   
-  constexpr double v_max = 800.0;         // [mm/s]
+  constexpr double v_max = 300.0;         // [mm/s]
 
   if (!prev_pos.allFinite() || !curr_pos.allFinite()) return false;
 
@@ -238,7 +286,7 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double pos_err = (pos_fk - pos_des).norm();
   const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
-  // RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
+  //RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
 
   return (pos_err <= 5.0 && (ang_err <= 0.1745));  //5mm & 10 deg 
 }

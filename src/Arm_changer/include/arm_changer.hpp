@@ -25,7 +25,7 @@ private:
   void sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void killCmd_callback(const sbus_interfaces::msg::KillCmd::SharedPtr msg);
   void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg);
-  std::array<double,5> compute_ik(const Eigen::Vector3d &position, const Eigen::Vector3d &heading);
+  std::array<double,5> compute_ik(const Eigen::Vector3d &p05, const Eigen::Vector3d &heading);
   void estimator_callback(const controller_interfaces::msg::EstimatorOutput::SharedPtr msg);
   void joint_callback();
   void heartbeat_timer_callback();
@@ -63,11 +63,12 @@ private:
   const double DH_a4_ = 24.;
   const double DH_a5_ = 68.;
 
+
   // workspace constrain
-  double x_min_ = -50.0; 
-  double x_max_ =  50.0;
-  double y_min_ = -50.0;
-  double y_max_ =  50.0;  
+  double x_min_ = -40.0; 
+  double x_max_ =  40.0;
+  double y_min_ = -40.0;
+  double y_max_ =  40.0;  
 
   Eigen::VectorXd a1_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
   Eigen::VectorXd a2_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
@@ -145,7 +146,7 @@ static inline double map(double input, double in_min, double in_max, double out_
   return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-inline std::pair<Eigen::Vector3d,Eigen::Vector3d> arm2base(const Eigen::Vector3d& pos_local, const Eigen::Vector3d& n_local, int arm_number)
+inline std::pair<Eigen::Vector3d,Eigen::Vector3d> arm2body(const Eigen::Vector3d& pos_local, const Eigen::Vector3d& n_local, int arm_number)
 {
   const double A_B = 120;
   const double q_B0[4] = {M_PI/4, M_PI/4 + M_PI/2, -(M_PI/4 + M_PI/2), -M_PI/4};
