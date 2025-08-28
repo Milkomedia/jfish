@@ -92,16 +92,15 @@ class DynamixelNode : public rclcpp::Node {
 public:
   DynamixelNode(const std::string &device_name);
   virtual ~DynamixelNode();
-  bool init_Dynamixel();
 
 private:
   void armchanger_callback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg);
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
   void watchdogCallback(watchdog_interfaces::msg::NodeState::ConstSharedPtr msg);
+  bool init_Dynamixel();
   void Dynamixel_Write_Read();
   void Dynamixel_Pub();
   void heartbeat_timer_callback();
-
   bool check_shutdown();
   
   // ROS2 communication

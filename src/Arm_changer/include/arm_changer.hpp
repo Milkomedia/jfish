@@ -24,7 +24,6 @@ private:
   // Callback to handle received PwmVal messages
   void sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void killCmd_callback(const sbus_interfaces::msg::KillCmd::SharedPtr msg);
-  void watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg);
   std::array<double,5> compute_ik(const Eigen::Vector3d &p05, const Eigen::Vector3d &heading);
   void estimator_callback(const controller_interfaces::msg::EstimatorOutput::SharedPtr msg);
   void joint_callback();
@@ -65,15 +64,15 @@ private:
 
 
   // workspace constrain
-  double x_min_ = -40.0; 
-  double x_max_ =  40.0;
-  double y_min_ = -40.0;
-  double y_max_ =  40.0;  
+  double x_min_ = -23.0; 
+  double x_max_ =  23.0;
+  double y_min_ = -23.0;
+  double y_max_ =  23.0;  
 
-  Eigen::VectorXd a1_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
-  Eigen::VectorXd a2_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
-  Eigen::VectorXd a3_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
-  Eigen::VectorXd a4_q_ = (Eigen::VectorXd(5) << 0.0, 0.84522, -1.50944, 0.90812, 0.0).finished(); // [rad]
+  Eigen::VectorXd a1_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]
+  Eigen::VectorXd a2_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]
+  Eigen::VectorXd a3_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]
+  Eigen::VectorXd a4_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]
 
   //Tilt value
   Eigen::Vector4d C2_;           // calculated tilted angle [rad]
@@ -93,7 +92,6 @@ private:
   bool     hb_enabled_;   // gate flag
 
   // Watchdog state
-  uint8_t watchdog_state_ = 1; // default(normal) is 1.
   bool kill_activated_ = true;
 };
 

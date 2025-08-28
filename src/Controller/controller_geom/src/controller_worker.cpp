@@ -28,6 +28,10 @@ ControllerNode::ControllerNode()
   command_->xd << 0.0, 0.0, 0.0;  // I don't know why,,, but
   command_->b1d << 1.0, 0.0, 0.0; // without this init, drone crashes.
 
+  // state_->J << 0.3, -0.0006, -0.0006,
+  //            -0.0006,  0.3, 0.0006,
+  //            -0.0006, 0.0006, 0.5318;
+
   // main-tasking thread starts
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
 
@@ -60,6 +64,7 @@ void ControllerNode::controller_timer_callback() {
     if (estimator_state_ == 1) { // dob apply
       Eigen::Vector3d M_out_dob_applied = state_->J * Omega_dot_star_tilde;
       M_out_pub = M_out_dob_applied;
+      // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]\n\n", M_out_dob_applied[0], -M_out_dob_applied[1], -M_out_dob_applied[2]);
     }
     else { // com estimator apply
       Eigen::Vector3d acc = state_->a - g_ * state_->R * e_3_;
@@ -86,6 +91,7 @@ void ControllerNode::controller_timer_callback() {
       
       // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]", Pc_hat_(0), Pc_hat_(1), Pc_hat_(2));
     }
+    
     roll_[2] = filtered_Omega_dot_(0); pitch_[2] = filtered_Omega_dot_(1); yaw_[2] = filtered_Omega_dot_(2);
     prev_d_hat_ = d_hat;
 
@@ -107,6 +113,8 @@ void ControllerNode::controller_timer_callback() {
   msg.moment = {M_out_pub[0], -M_out_pub[1], -M_out_pub[2]};
   msg.com_bias = {Pc_hat_[0], -Pc_hat_[1], -Pc_hat_[2]};
   controller_publisher_->publish(msg);
+
+  // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]", M_out_pub[0], -M_out_pub[1], -M_out_pub[2]);
 }
 
 void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {

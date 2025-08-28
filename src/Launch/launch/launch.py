@@ -136,14 +136,14 @@ def generate_launch_description():
     # --- rosbag record action ---
     # Record all topics (including hidden) with a small delay for discovery.
     bag_record = ExecuteProcess(
-    # Use a shell to redirect both stdout and stderr to /dev/null
     cmd=[
-            '/bin/bash', '-lc',
-            # NOTE: keep your original command and add redirection
-            f"ros2 bag record -a --include-hidden-topics -o '{bag_dir}' >/dev/null 2>&1"
-        ],
-    output='log'  # no-op now, everything is redirected anyway
-    )
+        '/bin/bash', '-lc',
+        f"ros2 bag record -a --include-hidden-topics "
+        f"--exclude '^/camera/fisheye(1|2)/image(_raw)?$' "
+        f"-o '{bag_dir}' >/dev/null 2>&1"
+    ],
+    output='log'
+ )
 
     # start after 2.0s so that topics are discovered
     bag_record_delayed = TimerAction(period=2.0, actions=[bag_record])

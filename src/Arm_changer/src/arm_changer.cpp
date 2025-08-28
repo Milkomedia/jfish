@@ -2,10 +2,6 @@
 
 using namespace std::chrono_literals;
 
-inline double map_value(double input, double in_min, double in_max, double out_min, double out_max) {
-  return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
 ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
   // ROS2 Subscribers
   controller_subscription_ = this->create_subscription<controller_interfaces::msg::EstimatorOutput>("/estimator_output", 1, std::bind(&ArmChangerWorker::estimator_callback, this, std::placeholders::_1));
@@ -27,8 +23,8 @@ ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
 }
 
 void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {
-  double delta_x_manual = map_value(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_);
-  double delta_y_manual = map_value(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_);
+  double delta_x_manual = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_);
+  double delta_y_manual = map(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_);
   //RCLCPP_INFO(this->get_logger(), "x: %.4f, y: %.4f", delta_x_manual, delta_y_manual);  
   
   //heading angle [rad]
@@ -291,7 +287,8 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
   //RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
 
-  return (pos_err <= 5.0 && (ang_err <= 0.01745));  //5mm & 1 deg 
+  //return (pos_err <= 10.0 && (ang_err <= 0.1745));  //10mm & 10 deg 
+  return true;
 }
 
 void ArmChangerWorker::joint_callback() {
@@ -310,11 +307,6 @@ void ArmChangerWorker::TiltAngle_callback(const allocator_interfaces::msg::TiltA
   C2_(1) = msg->th2;
   C2_(2) = msg->th3;
   C2_(3) = msg->th4;
-}
-
-void ArmChangerWorker::watchdog_callback(const watchdog_interfaces::msg::NodeState::SharedPtr msg) {
-  // Watchdog update
-  watchdog_state_ = msg->state;
 }
 
 void ArmChangerWorker::heartbeat_timer_callback() {

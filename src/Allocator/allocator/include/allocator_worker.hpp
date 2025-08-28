@@ -55,7 +55,7 @@ private:
   // BLDC Motor Model
   const double pwm_alpha_ = 46.5435;  // F = a * pwm^2 + b
   const double pwm_beta_  = 8.6111;   // F = a * pwm^2 + b
-  const double zeta       = 0.04;     // b/k constant
+  const double zeta       = 0.02;     // b/k constant
 
   // Control Allocation params
   Eigen::Matrix<double,6,4> DH_params_; // 6x4 DH table (rows: link 0..5; cols: a, alpha, d, theta0)
