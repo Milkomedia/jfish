@@ -52,9 +52,6 @@ private:
 
   fdcl::control fdcl_controller_;
 
-  double f_out_geom;
-  Vector3 M_out_geom;
-
   void sbusCallback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg);
   void optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg);
   void imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg);
@@ -63,6 +60,7 @@ private:
   void heartbeat_timer_callback();
   void debugging_timer_callback();
   void controller_loop();
+  Eigen::Vector3d DoB_update(Eigen::Vector3d rpy, Eigen::Vector3d tau_tilde_star);
 
   rclcpp::Subscription<sbus_interfaces::msg::SbusSignal>::SharedPtr sbus_subscription_;
   rclcpp::Subscription<mocap_interfaces::msg::MocapMeasured>::SharedPtr optitrack_mea_subscription_;
@@ -91,25 +89,13 @@ private:
   uint8_t prev_estimator_state_ = 0;
 
   // DOB state
-  const double k_bar_ = 1.0;
-  Eigen::Vector3d prev_d_hat_ = Eigen::Vector3d::Zero();
-  
-  Eigen::Vector3d prev_Omega_ = Eigen::Vector3d::Zero();
-  Eigen::Vector3d filtered_Omega_dot_ = Eigen::Vector3d::Zero();
-  Eigen::Vector3d filtered_Omega_dot_star_tilde_ = Eigen::Vector3d::Zero();
-  const double Qfilter_Alpha_ = 0.9922;  // 0.5Hz
-  const double Qfilter_Beta_ = 1.0 - Qfilter_Alpha_;
-  const double Qfilter_dt_ = Loop_us / 1000000.0; // [sec]
+  Eigen::Vector3d d_hat_ = Eigen::Vector3d::Zero();
+  Eigen::Vector3d tau_tilde_star_ = Eigen::Vector3d::Zero();
 
   // CoM estimate state
-  const double m_bar_ = 4.7; // this must be same in controller_param.h
-  const double g_ = 9.80665; // [m/s^2]
-  const Eigen::Vector3d e_3_ = Eigen::Vector3d(0.0, 0.0, 1.0);
-  const double gamma_ = 0.000001;
-  Eigen::Matrix3d filtered_A_hat_ = Eigen::Matrix3d::Zero();
-  Eigen::Vector3d Pc_hat_ = Eigen::Vector3d::Zero();
 
-  Eigen::Vector3d M_out_pub = Eigen::Vector3d::Zero();
+  double F_out_pub_ = 0.;
+  Eigen::Vector3d M_out_pub_ = Eigen::Vector3d::Zero();
 
   // sbus state
   int   sbus_chnl_[10] = {1024, 1024, 352, 1024, 352, 352, 352, 352, 352, 352};
@@ -120,9 +106,6 @@ private:
   double x_[3] = {0.0, 0.0, 0.0}; // opti x [m, m/s, m/s^2]
   double y_[3] = {0.0, 0.0, 0.0}; // opti y [m, m/s, m/s^2]
   double z_[3] = {0.0, 0.0, 0.0}; // opti z [m, m/s, m/s^2]
-
-  double inital_yaw_bias_ = 0.0;
-  Eigen::Matrix3d R_yaw_bias_ = Eigen::Matrix3d::Identity();
 
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
