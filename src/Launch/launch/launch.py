@@ -132,19 +132,35 @@ def generate_launch_description():
             name='gui_node',
         ),
     ]
+    # --- rosbag record action (whitelist) ---
+    allow_topics = [
+        "/allocator_info",
+        "/controller_info",
+        "/controller_output",
+        "/imu/data",
+        "/imu_mea",
+        "/joint_cmd",
+        "/joint_mea",
+        "/joint_write",
+        "/motor_cmd",
+        "/opti_pos",
+        "/optitrack_mea",
+        "/rosout",
+        "/sbus_kill",
+        "/sbus_signal",
+        "/tilt_cmd",
+    ]
 
-    # --- rosbag record action ---
-    # Record all topics (including hidden) with a small delay for discovery.
     bag_record = ExecuteProcess(
-    cmd=[
-        '/bin/bash', '-lc',
-        f"ros2 bag record -a --include-hidden-topics "
-        f"--exclude '^/camera/fisheye(1|2)/image(_raw)?$' "
-        f"-o '{bag_dir}' >/dev/null 2>&1"
-    ],
-    output='log'
- )
-
+        cmd=[
+            "/bin/bash", "-lc",
+            # 명시한 토픽만 기록 (이상한/불필요 토픽은 자동 배제)
+            "ros2 bag record "
+            + " ".join(allow_topics)
+            + f" -o '{bag_dir}' >/dev/null 2>&1"
+        ],
+        output="log",
+    )
     # start after 2.0s so that topics are discovered
     bag_record_delayed = TimerAction(period=2.0, actions=[bag_record])
 

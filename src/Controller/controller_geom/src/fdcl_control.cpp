@@ -38,6 +38,8 @@ void fdcl::control::position_control(void){
   eIX.integrate(c1 * eX + eV, dt); // eq (13)
   double sat_sigma = 20.0/kIX;
   saturate(eIX.error, -sat_sigma, sat_sigma);
+  eIX.error(0)=0.0;
+  eIX.error(1)=0.0;
 
   // force 'f' along negative b3-axis - eq (14)
   // this term equals to R.e3

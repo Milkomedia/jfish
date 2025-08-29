@@ -64,10 +64,10 @@ private:
 
 
   // workspace constrain
-  double x_min_ = -23.0; 
-  double x_max_ =  23.0;
-  double y_min_ = -23.0;
-  double y_max_ =  23.0;  
+  double x_min_ =  0.; 
+  double x_max_ =  0.;
+  double y_min_ = -40.0;
+  double y_max_ =  40.0;  
 
   Eigen::VectorXd a1_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]
   Eigen::VectorXd a2_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]

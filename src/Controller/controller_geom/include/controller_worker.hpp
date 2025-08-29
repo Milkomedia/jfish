@@ -97,7 +97,7 @@ private:
   Eigen::Vector3d prev_Omega_ = Eigen::Vector3d::Zero();
   Eigen::Vector3d filtered_Omega_dot_ = Eigen::Vector3d::Zero();
   Eigen::Vector3d filtered_Omega_dot_star_tilde_ = Eigen::Vector3d::Zero();
-  const double Qfilter_Alpha_ = 0.999;
+  const double Qfilter_Alpha_ = 0.9922;  // 0.5Hz
   const double Qfilter_Beta_ = 1.0 - Qfilter_Alpha_;
   const double Qfilter_dt_ = Loop_us / 1000000.0; // [sec]
 
