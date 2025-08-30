@@ -66,7 +66,6 @@ inline UAVParameters getUAVParameters() {
              -0.0006, 0.0006, 0.5318;
   return param;
 }
-
 }
 
 #endif // CONTROLLER_PARAM_H

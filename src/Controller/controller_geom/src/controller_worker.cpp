@@ -28,9 +28,9 @@ ControllerNode::ControllerNode()
   command_->xd << 0.0, 0.0, 0.0;  // I don't know why,,, but
   command_->b1d << 1.0, 0.0, 0.0; // without this init, drone crashes.
 
-  state_->J << 0.3, -0.0006, -0.0006,
-             -0.0006,  0.3, 0.0006,
-             -0.0006, 0.0006, 0.5318;
+  state_->J << 0.3, 0.0006, 0.0006,
+             0.0006,  0.3, 0.0006,
+             0.0006, 0.0006, 0.5318;
 
   // main-tasking thread starts
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
@@ -47,14 +47,17 @@ void ControllerNode::controller_timer_callback() {
   fdcl_controller_.position_control();
   fdcl_controller_.output_fM(f_out_geom, M_out_geom);
 
-  tau_tilde_star_ = M_out_geom - d_hat_;
+  tau_tilde_star_ = M_out_geom;
 
-  if (estimator_state_ == 1) { // conventional
+  Eigen::Vector3d RPY(roll_[0], -pitch_[0], -yaw_[0]);
+
+  if (estimator_state_ == 0) { // conventional
     F_out_pub_ = f_out_geom;
-    M_out_pub_ = M_out_geom;
+    M_out_pub_ = tau_tilde_star_;
   }
   else if (estimator_state_ == 1) { // dob apply
     F_out_pub_ = f_out_geom;
+    tau_tilde_star_ = tau_tilde_star_ - d_hat_;
     M_out_pub_ = tau_tilde_star_;
   }
   else if (estimator_state_ == 2){ // com estimator apply
@@ -97,12 +100,15 @@ void ControllerNode::controller_timer_callback() {
   M_out_pub_ = overriding_coeff_ * M_out_pub_;
   F_out_pub_ = overriding_coeff_ * F_out_pub_;
 
+  // d hat update
+  d_hat_ = DoB_update(RPY, tau_tilde_star_);
+
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
   msg.force = F_out_pub_;
   msg.moment = {M_out_pub_[0], -M_out_pub_[1], -M_out_pub_[2]};
   msg.d_hat = {d_hat_[0], -d_hat_[1], -d_hat_[2]};
-  // msg.p_com = {Pc_hat_[0], -Pc_hat_[1], -Pc_hat_[2]};
+    // msg.p_com = {Pc_hat_[0], -Pc_hat_[1], -Pc_hat_[2]};
   msg.p_com = {0, 0, 0};
   controller_publisher_->publish(msg);
   // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]", prev_d_hat_[0], -prev_d_hat_[1], -prev_d_hat_[2]);
@@ -217,34 +223,111 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   Eigen::Matrix3d R;
 
   R(0,0) =  1.0 - 2.0 * (yy + zz);
-  R(0,1) = -2.0 * (xy - wz);
-  R(0,2) = -2.0 * (xz + wy);
-  R(1,0) = -2.0 * (xy + wz);
+  R(0,1) = -2.0 * (xy - wz);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
+  R(0,2) = -2.0 * (xz + wy);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
+  R(1,0) = -2.0 * (xy + wz);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
   R(1,1) =  1.0 - 2.0 * (xx + zz);
   R(1,2) =  2.0 * (yz - wx);
-  R(2,0) = -2.0 * (xz - wy);
+  R(2,0) = -2.0 * (xz - wy);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
   R(2,1) =  2.0 * (yz + wx);
   R(2,2) =  1.0 - 2.0 * (xx + yy);
 
+  state_->R = R;
+
   // gyro (copy to controller-state && gui-sending variable)
-  state_->W << msg->w[0], -msg->w[1], -msg->w[2];
+  state_->W << msg->w[0], -msg->w[1], -msg->w[2];  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
   roll_[1] = msg->w[0]; pitch_[1] = msg->w[1]; yaw_[1] = msg->w[2];
 
   // ZYX Tait–Bryan angles
   roll_[0]  = std::atan2(2.0*(wx + yz), 1.0 - 2.0*(xx + yy));
   pitch_[0] = std::asin (2.0*(wy - xz));
   yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz));
-
-  Eigen::Vector3d RPY(roll_[0], -pitch_[0], -yaw_[0]);
-
-  // d hat update
-  d_hat_ = DoB_update(RPY, tau_tilde_star_);
 }
 
-Eigen::Vector3d ControllerNode::DoB_update(Eigen::Vector3d rpy, Eigen::Vector3d tau_tilde_star){
-  Eigen::Vector3d hoho(0, 0, 0);
-  hoho(0) = rpy(1) * tau_tilde_star(2) * 0.0;
-  return hoho;
+Eigen::Vector3d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector3d tau_tilde_star)
+{
+  // -------- 상수 설정 --------
+  static const double DT = 0.0025;     // [s] 400 Hz
+  static const double fc = 0.5;       // [Hz] Butterworth cutoff
+  const double wc = 2.0 * M_PI * fc;  // ωc
+  const double w2 = wc * wc;
+  const double w3 = w2 * wc;
+
+  // -------- MOI (대각 성분만 사용, 오프대각 무시) --------
+  static const double Jx = 0.3;
+  static const double Jy = 0.3;
+  static const double Jz = 0.5318;
+
+  // -------- 상태 (Block A: Q*s^2*J*q) --------
+  static double x_r1=0.0, x_r2=0.0, x_r3=0.0; // roll
+  static double x_p1=0.0, x_p2=0.0, x_p3=0.0; // pitch
+  static double x_y1=0.0, x_y2=0.0, x_y3=0.0; // yaw
+
+  // -------- 상태 (Block B: Q*tau_tilde) --------
+  static double y_r1=0.0, y_r2=0.0, y_r3=0.0; // roll
+  static double y_p1=0.0, y_p2=0.0, y_p3=0.0; // pitch
+  static double y_y1=0.0, y_y2=0.0, y_y3=0.0; // yaw
+
+  // ================= Roll =================
+  double x_dot_r1 = -2.0*wc*x_r1 - 2.0*w2*x_r2 - w3*x_r3 + rpy.x();
+  double x_dot_r2 = x_r1;
+  double x_dot_r3 = x_r2;
+  x_r1 += x_dot_r1 * DT;
+  x_r2 += x_dot_r2 * DT;
+  x_r3 += x_dot_r3 * DT;
+  double tau_hat_r = Jx * (w3 * x_r1);
+
+  double y_dot_r1 = -2.0*wc*y_r1 - 2.0*w2*y_r2 - w3*y_r3 + tau_tilde_star.x();
+  double y_dot_r2 = y_r1;
+  double y_dot_r3 = y_r2;
+  y_r1 += y_dot_r1 * DT;
+  y_r2 += y_dot_r2 * DT;
+  y_r3 += y_dot_r3 * DT;
+  double Qtau_r = w3 * y_r3;
+
+  double dhat_r = tau_hat_r - Qtau_r;
+
+  // ================= Pitch =================
+  double x_dot_p1 = -2.0*wc*x_p1 - 2.0*w2*x_p2 - w3*x_p3 + rpy.y();
+  double x_dot_p2 = x_p1;
+  double x_dot_p3 = x_p2;
+  x_p1 += x_dot_p1 * DT;
+  x_p2 += x_dot_p2 * DT;
+  x_p3 += x_dot_p3 * DT;
+  double tau_hat_p = Jy * (w3 * x_p1);
+
+  double y_dot_p1 = -2.0*wc*y_p1 - 2.0*w2*y_p2 - w3*y_p3 + tau_tilde_star.y();
+  double y_dot_p2 = y_p1;
+  double y_dot_p3 = y_p2;
+  y_p1 += y_dot_p1 * DT;
+  y_p2 += y_dot_p2 * DT;
+  y_p3 += y_dot_p3 * DT;
+  double Qtau_p = w3 * y_p3;
+
+  double dhat_p = tau_hat_p - Qtau_p;
+
+  // ================= Yaw =================
+  double x_dot_y1 = -2.0*wc*x_y1 - 2.0*w2*x_y2 - w3*x_y3 + rpy.z();
+  double x_dot_y2 = x_y1;
+  double x_dot_y3 = x_y2;
+  x_y1 += x_dot_y1 * DT;
+  x_y2 += x_dot_y2 * DT;
+  x_y3 += x_dot_y3 * DT;
+  double tau_hat_y = Jz * (w3 * x_y1);
+
+  double y_dot_y1 = -2.0*wc*y_y1 - 2.0*w2*y_y2 - w3*y_y3 + tau_tilde_star.z();
+  double y_dot_y2 = y_y1;
+  double y_dot_y3 = y_y2;
+  y_y1 += y_dot_y1 * DT;
+  y_y2 += y_dot_y2 * DT;
+  y_y3 += y_dot_y3 * DT;
+  double Qtau_y = w3 * y_y3;
+
+  double dhat_y = tau_hat_y - Qtau_y;
+
+  // -------- 최종 외란 추정 --------
+  Eigen::Vector3d d_hat(dhat_r, dhat_p, dhat_y);
+  return d_hat;
 }
 
 void ControllerNode::mujocoCallback(const mujoco_interfaces::msg::MujocoState::SharedPtr msg) {
