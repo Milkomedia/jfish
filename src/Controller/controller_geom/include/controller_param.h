@@ -36,8 +36,8 @@ inline ControlParameters getControlParameters() {
   param.use_decoupled_yaw = true;
   param.kX << 22.0, 22.0, 23.0;
   param.kV << 8.0, 8.0, 7.0;
-  param.kR << 20.0, 20.0, 3.5;
-  param.kW << 7.0, 7.0, 2.2;
+  param.kR << 20.0, 20.0, 5.0;
+  param.kW << 7.0, 7.0, 2.7;
   return param;
 }
 
@@ -49,7 +49,7 @@ inline IntegralParameters getIntegralParameters() {
   param.kIR = 0.0; //이용안하는 값
   
   param.kI = 0.00; //자세값
-  param.kyI = 1.0; //yaw값
+  param.kyI = 0.0; //yaw값
 
   param.c1 = 1.0; //위치 (바꾸지말기)
   param.c2 = 0.0; //자세
