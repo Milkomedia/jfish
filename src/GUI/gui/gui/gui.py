@@ -448,8 +448,8 @@ class DebugGUI(QWidget):
             plot_item.getAxis('left').setTextPen(pg.mkPen(color='k'))
 
             # Set y-axis range
-            if idx == "z": plot_item.setYRange(-0.1, 2.0)
-            elif idx == "ψ": plot_item.setYRange(-3.14, 3.14)
+            if idx == "z": plot_item.setYRange(-0.1, 1.5)
+            elif idx == "ψ": plot_item.setYRange(-45., 45.)
             else: plot_item.setYRange(-1.0, 1.0)
 
             # Two curves: reference (blue) and measurement (red), each with thicker lines
@@ -576,7 +576,7 @@ class DebugGUI(QWidget):
         self.plot_ref_data[0].append(self.controller_data['pos_cmd'][0])
         self.plot_ref_data[1].append(self.controller_data['pos_cmd'][1])
         self.plot_ref_data[2].append(self.controller_data['pos_cmd'][2])
-        self.plot_ref_data[3].append(self.controller_data['pos_cmd'][3])
+        self.plot_ref_data[3].append(self.controller_data['pos_cmd'][3]*180/pi)
 
         self.plot_mea_data[0].append(self.controller_data['opti_x'][0])
         self.plot_mea_data[1].append(self.controller_data['opti_y'][0])

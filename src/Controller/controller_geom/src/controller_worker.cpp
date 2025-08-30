@@ -47,13 +47,11 @@ void ControllerNode::controller_timer_callback() {
   fdcl_controller_.position_control();
   fdcl_controller_.output_fM(f_out_geom, M_out_geom);
 
-  tau_tilde_star_ = M_out_geom;
-
-  Eigen::Vector3d RPY(roll_[0], -pitch_[0], -yaw_[0]);
+  tau_tilde_star_ = M_out_geom; // uses prev d_hat
 
   if (estimator_state_ == 0) { // conventional
     F_out_pub_ = f_out_geom;
-    M_out_pub_ = tau_tilde_star_;
+    M_out_pub_ = M_out_geom;
   }
   else if (estimator_state_ == 1) { // dob apply
     F_out_pub_ = f_out_geom;
@@ -94,14 +92,15 @@ void ControllerNode::controller_timer_callback() {
     RCLCPP_WARN(this->get_logger(), "YOU BULL-SHIT");
   }
 
+  // d hat update
+  Eigen::Vector3d RPY(roll_[0], -pitch_[0], -yaw_[0]);
+  d_hat_ = DoB_update(RPY, tau_tilde_star_);
+
   if (is_paused_){overriding_coeff_ -= turnoff_coeff_;} // pause
   else           {overriding_coeff_ += turnon_coeff_;} // resume
   overriding_coeff_ = std::clamp(overriding_coeff_, 0.0, 1.0);
   M_out_pub_ = overriding_coeff_ * M_out_pub_;
   F_out_pub_ = overriding_coeff_ * F_out_pub_;
-
-  // d hat update
-  d_hat_ = DoB_update(RPY, tau_tilde_star_);
 
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
@@ -180,12 +179,7 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 
   if(estimator_state_ != prev_estimator_state_){
     prev_estimator_state_ = estimator_state_;
-    // prev_d_hat_ = Eigen::Vector3d::Zero();
-    // prev_Omega_ = Eigen::Vector3d::Zero();
-    // filtered_Omega_dot_ = Eigen::Vector3d::Zero();
-    // filtered_Omega_dot_star_tilde_ = Eigen::Vector3d::Zero();
-    // filtered_A_hat_ = Eigen::Matrix3d::Zero();
-    // Pc_hat_ = Eigen::Vector3d::Zero();
+    d_hat_ =  Eigen::Vector3d::Zero();
     if     (estimator_state_==0){RCLCPP_INFO(this->get_logger(), "control mode -> [Conventional]");}
     else if(estimator_state_==1){RCLCPP_INFO(this->get_logger(), "control mode -> [DOB]");}
     else if(estimator_state_==2){RCLCPP_INFO(this->get_logger(), "control mode -> [CoM estimating]");}
@@ -204,7 +198,7 @@ void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasure
 }
 
 void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg) {
-  // quat -> R
+  // quat(z-up) -> R(z-down)
   const double w = msg->q[0];
   const double x = msg->q[1];
   const double y = msg->q[2];
@@ -223,19 +217,19 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   Eigen::Matrix3d R;
 
   R(0,0) =  1.0 - 2.0 * (yy + zz);
-  R(0,1) = -2.0 * (xy - wz);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
-  R(0,2) = -2.0 * (xz + wy);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
-  R(1,0) = -2.0 * (xy + wz);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
+  R(0,1) = -2.0 * (xy - wz);
+  R(0,2) = -2.0 * (xz + wy);
+  R(1,0) = -2.0 * (xy + wz);
   R(1,1) =  1.0 - 2.0 * (xx + zz);
   R(1,2) =  2.0 * (yz - wx);
-  R(2,0) = -2.0 * (xz - wy);  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
+  R(2,0) = -2.0 * (xz - wy);
   R(2,1) =  2.0 * (yz + wx);
   R(2,2) =  1.0 - 2.0 * (xx + yy);
 
   state_->R = R;
 
   // gyro (copy to controller-state && gui-sending variable)
-  state_->W << msg->w[0], -msg->w[1], -msg->w[2];  //-------------------------------------dwqcrewqrfekduaeghiukuwxqtghetwgafewtai
+  state_->W << msg->w[0], -msg->w[1], -msg->w[2];
   roll_[1] = msg->w[0]; pitch_[1] = msg->w[1]; yaw_[1] = msg->w[2];
 
   // ZYX Tait–Bryan angles
@@ -327,6 +321,7 @@ Eigen::Vector3d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector3d t
 
   // -------- 최종 외란 추정 --------
   Eigen::Vector3d d_hat(dhat_r, dhat_p, dhat_y);
+  d_hat = (d_hat.cwiseMax(Eigen::Vector3d::Constant(-5.0))).cwiseMin(Eigen::Vector3d::Constant(5.0)); // saturation
   return d_hat;
 }
 
