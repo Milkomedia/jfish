@@ -110,7 +110,8 @@ void ControllerNode::controller_timer_callback() {
     Eigen::Matrix3d Q_A_hat = m_bar_*skew_acc;
     Eigen::Vector3d Pc_hat_dot = gamma_*Q_A_hat.transpose()*d_hat_;
     Pc_hat_ += Pc_hat_dot*DT; // 1/s
-    Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector3d::Constant(-0.5))).cwiseMin(Eigen::Vector3d::Constant(0.5)); // saturation
+    Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector3d::Constant(-0.08))).cwiseMin(Eigen::Vector3d::Constant(0.08)); // saturation
+    if ((Pc_hat_.array() == -0.08).any() || (Pc_hat_.array() == 0.08).any()) {RCLCPP_WARN(this->get_logger(), "Pc_hat_ saturated STOP");}
 
     F_out_pub_ = f_out_geom;
     tau_tilde_star_ = tau_tilde_star_ - d_hat_;
@@ -218,15 +219,7 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 
 void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg) {
   // for controller-variable
-  double X_body = X_offset+(+msg->pos[0]);
-  double Y_body = Y_offset+(-msg->pos[1]);
-  double Z_body = Z_offset+(-msg->pos[2]);
-
-  double delta_x_manual = map(static_cast<double>(sbus_chnl_[7]), 352, 1696, x_min_, x_max_);
-  double delta_y_manual = map(static_cast<double>(sbus_chnl_[8]), 352, 1696, y_min_, y_max_);
-
-
-  state_->x <<  X_body-delta_x_manual, Y_body-(-delta_y_manual), Z_body;
+  state_->x << X_offset+msg->pos[0], Y_offset-msg->pos[1], Z_offset-msg->pos[2];
   state_->v << msg->vel[0], -msg->vel[1], -msg->vel[2];
   state_->a << msg->acc[0], -msg->acc[1], -msg->acc[2];
   // for debugging-variable
