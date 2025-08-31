@@ -59,32 +59,62 @@ void ControllerNode::controller_timer_callback() {
     M_out_pub_ = tau_tilde_star_;
   }
   else if (estimator_state_ == 2){ // com estimator apply
-    /*
+    Eigen::Vector3d e_3_(0.0, 0.0, 1.0);
     Eigen::Vector3d acc = state_->a - g_ * state_->R * e_3_;
+    Eigen::Vector3d F_star(0.0, 0.0, f_out_geom);
+
+    // 상태 (3차 버터워스 Q필터: 각 축별)
+    static double ax1=0.0, ax2=0.0, ax3=0.0; // x-axis
+    static double ay1=0.0, ay2=0.0, ay3=0.0; // y-axis
+    static double az1=0.0, az2=0.0, az3=0.0; // z-axis
+
+    // --- X축 ---
+    double dx1 = -2.0*wc*ax1 - 2.0*w2*ax2 - w3*ax3 + acc.x();
+    double dx2 = ax1;
+    double dx3 = ax2;
+    ax1 += dx1 * DT;
+    ax2 += dx2 * DT;
+    ax3 += dx3 * DT;
+    double q_acc_x = w3 * ax3;  // Q(acc.x)
+
+    // --- Y축 ---
+    double dy1 = -2.0*wc*ay1 - 2.0*w2*ay2 - w3*ay3 + acc.y();
+    double dy2 = ay1;
+    double dy3 = ay2;
+    ay1 += dy1 * DT;
+    ay2 += dy2 * DT;
+    ay3 += dy3 * DT;
+    double q_acc_y = w3 * ay3;  // Q(acc.y)
+
+    // --- Z축 ---
+    double dz1 = -2.0*wc*az1 - 2.0*w2*az2 - w3*az3 + acc.z();
+    double dz2 = az1;
+    double dz3 = az2;
+    az1 += dz1 * DT;
+    az2 += dz2 * DT;
+    az3 += dz3 * DT;
+    double q_acc_z = w3 * az3;  // Q(acc.z)
+
+    Eigen::Vector3d Q_acc(q_acc_x, q_acc_y, q_acc_z);
+
     Eigen::Matrix3d skew_acc;
-    skew_acc << 0.0,      -acc.z(),  acc.y(),
-                acc.z(),  0.0,       -acc.x(),
-              -acc.y(),  acc.x(),   0.0;
+    skew_acc <<       0.0, -Q_acc.z(),   Q_acc.y(),
+                Q_acc.z(),        0.0,  -Q_acc.x(),
+               -Q_acc.y(),  Q_acc.x(),         0.0;
     
-    Eigen::Vector3d F_star(0.0, 0.0, f_out_geom); << no f_out_geom
     Eigen::Matrix3d skew_F_star;
     skew_F_star <<  0.0,         -F_star.z(),   F_star.y(),
                     F_star.z(),          0.0,  -F_star.x(),
                   -F_star.y(),   F_star.x(),          0.0;
-                  
-    Eigen::Matrix3d A_hat = m_bar_*J_bar_inv*skew_acc;
-    filtered_A_hat_ = Qfilter_Alpha_*filtered_A_hat_ + Qfilter_Beta_*A_hat;
-    Eigen::Vector3d d2 = k_bar_*J_bar_inv*skew_F_star*Pc_hat_;
-    Eigen::Vector3d Pc_hat_dot = gamma_*filtered_A_hat_.transpose()*(d_hat + d2);
-    Pc_hat_ += Pc_hat_dot; // 1/s
-    Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector3d::Constant(-0.1))).cwiseMin(Eigen::Vector3d::Constant(0.1)); // saturation
-
-    Eigen::Vector3d M_out_com_applied = state_->J * Omega_dot_star_tilde;
-    M_out_pub_ = M_out_com_applied;
-    */
+    
+    Eigen::Matrix3d Q_A_hat = m_bar_*skew_acc;
+    Eigen::Vector3d Pc_hat_dot = gamma_*Q_A_hat.transpose()*d_hat_;
+    Pc_hat_ += Pc_hat_dot*DT; // 1/s
+    Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector3d::Constant(-0.5))).cwiseMin(Eigen::Vector3d::Constant(0.5)); // saturation
 
     F_out_pub_ = f_out_geom;
-    M_out_pub_ = M_out_geom; // asik anham
+    tau_tilde_star_ = tau_tilde_star_ - d_hat_;
+    M_out_pub_ = tau_tilde_star_;
   }
   else { // hoxy mola
     F_out_pub_ = f_out_geom;
@@ -107,8 +137,7 @@ void ControllerNode::controller_timer_callback() {
   msg.force = F_out_pub_;
   msg.moment = {M_out_pub_[0], -M_out_pub_[1], -M_out_pub_[2]};
   msg.d_hat = {d_hat_[0], -d_hat_[1], -d_hat_[2]};
-    // msg.p_com = {Pc_hat_[0], -Pc_hat_[1], -Pc_hat_[2]};
-  msg.p_com = {0, 0, 0};
+  msg.p_com = {Pc_hat_[0], -Pc_hat_[1], -Pc_hat_[2]};
   controller_publisher_->publish(msg);
   // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]", prev_d_hat_[0], -prev_d_hat_[1], -prev_d_hat_[2]);
 }
@@ -180,6 +209,7 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   if(estimator_state_ != prev_estimator_state_){
     prev_estimator_state_ = estimator_state_;
     d_hat_ =  Eigen::Vector3d::Zero();
+    Pc_hat_ =  Eigen::Vector3d::Zero();
     if     (estimator_state_==0){RCLCPP_INFO(this->get_logger(), "control mode -> [Conventional]");}
     else if(estimator_state_==1){RCLCPP_INFO(this->get_logger(), "control mode -> [DOB]");}
     else if(estimator_state_==2){RCLCPP_INFO(this->get_logger(), "control mode -> [CoM estimating]");}
@@ -188,7 +218,15 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 
 void ControllerNode::optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg) {
   // for controller-variable
-  state_->x << X_offset+msg->pos[0], Y_offset-msg->pos[1], Z_offset-msg->pos[2];
+  double X_body = X_offset+(+msg->pos[0]);
+  double Y_body = Y_offset+(-msg->pos[1]);
+  double Z_body = Z_offset+(-msg->pos[2]);
+
+  double delta_x_manual = map(static_cast<double>(sbus_chnl_[7]), 352, 1696, x_min_, x_max_);
+  double delta_y_manual = map(static_cast<double>(sbus_chnl_[8]), 352, 1696, y_min_, y_max_);
+
+
+  state_->x <<  X_body-delta_x_manual, Y_body-(-delta_y_manual), Z_body;
   state_->v << msg->vel[0], -msg->vel[1], -msg->vel[2];
   state_->a << msg->acc[0], -msg->acc[1], -msg->acc[2];
   // for debugging-variable
@@ -240,18 +278,6 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
 
 Eigen::Vector3d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector3d tau_tilde_star)
 {
-  // -------- 상수 설정 --------
-  static const double DT = 0.0025;     // [s] 400 Hz
-  static const double fc = 0.5;       // [Hz] Butterworth cutoff
-  const double wc = 2.0 * M_PI * fc;  // ωc
-  const double w2 = wc * wc;
-  const double w3 = w2 * wc;
-
-  // -------- MOI (대각 성분만 사용, 오프대각 무시) --------
-  static const double Jx = 0.3;
-  static const double Jy = 0.3;
-  static const double Jz = 0.5318;
-
   // -------- 상태 (Block A: Q*s^2*J*q) --------
   static double x_r1=0.0, x_r2=0.0, x_r3=0.0; // roll
   static double x_p1=0.0, x_p2=0.0, x_p3=0.0; // pitch

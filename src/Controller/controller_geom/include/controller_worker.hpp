@@ -38,6 +38,25 @@ constexpr double X_offset = 0.0; // [m]
 constexpr double Y_offset = 0.6; // [m] 
 constexpr double Z_offset = 0.0; // [m] it must be (+) sign.
 
+static const double DT = 0.0025;     // [s] 400 Hz
+static const double fc = 0.5;       // [Hz] Butterworth cutoff
+const double wc = 2.0 * M_PI * fc;  // ωc
+const double w2 = wc * wc;
+const double w3 = w2 * wc;  
+static const double Jx = 0.3;
+static const double Jy = 0.3;
+static const double Jz = 0.5318;
+
+// workspace constrain
+double x_min_ =  0.; 
+double x_max_ =  0.;
+double y_min_ = -40.0;
+double y_max_ =  40.0; 
+
+static inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
+  return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
 class ControllerNode : public rclcpp::Node {
 public:
   ControllerNode();
@@ -93,6 +112,10 @@ private:
   Eigen::Vector3d tau_tilde_star_ = Eigen::Vector3d::Zero();
 
   // CoM estimate state
+  Eigen::Vector3d Pc_hat_ = Eigen::Vector3d::Zero();
+  double m_bar_ = 8.0;
+  double gamma_ = 0.0001;
+  double g_ =9.81;
 
   double F_out_pub_ = 0.;
   Eigen::Vector3d M_out_pub_ = Eigen::Vector3d::Zero();
