@@ -10,6 +10,7 @@
 #include "sbus_interfaces/msg/sbus_signal.hpp"
 #include "controller_interfaces/msg/controller_output.hpp"
 #include "controller_interfaces/msg/controller_debug_val.hpp"
+#include "controller_interfaces/msg/controller_info.hpp"
 #include "mocap_interfaces/msg/mocap_measured.hpp"
 #include "imu_interfaces/msg/imu_measured.hpp"
 #include "mujoco_interfaces/msg/mujoco_state.hpp"
@@ -79,6 +80,7 @@ private:
   void heartbeat_timer_callback();
   void debugging_timer_callback();
   void controller_loop();
+  void pub_for_plot();
   Eigen::Vector3d DoB_update(Eigen::Vector3d rpy, Eigen::Vector3d tau_tilde_star);
 
   rclcpp::Subscription<sbus_interfaces::msg::SbusSignal>::SharedPtr sbus_subscription_;
@@ -93,6 +95,9 @@ private:
 
   rclcpp::Publisher<controller_interfaces::msg::ControllerDebugVal>::SharedPtr debug_val_publisher_;
   rclcpp::TimerBase::SharedPtr debugging_timer_;
+
+  rclcpp::Publisher<controller_interfaces::msg::ControllerInfo>::SharedPtr publisher_for_plot_;
+  rclcpp::TimerBase::SharedPtr plot_timer_;
 
   // pause&resume variable
   bool is_paused_ = true; // false->resume(flight-available) / true->pause

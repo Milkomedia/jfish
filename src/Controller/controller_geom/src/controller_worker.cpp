@@ -20,10 +20,12 @@ ControllerNode::ControllerNode()
   controller_publisher_ = this->create_publisher<controller_interfaces::msg::ControllerOutput>("/controller_output", 1);
   heartbeat_publisher_  = this->create_publisher<watchdog_interfaces::msg::NodeState>("/controller_state", 1);
   debug_val_publisher_  = this->create_publisher<controller_interfaces::msg::ControllerDebugVal>("/controller_info", 1);
+  publisher_for_plot_  = this->create_publisher<controller_interfaces::msg::ControllerInfo>("/controller_plot", 1);
 
   // Timers
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ControllerNode::heartbeat_timer_callback, this));
   debugging_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&ControllerNode::debugging_timer_callback, this));
+  plot_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), std::bind(&ControllerNode::pub_for_plot, this));
 
   command_->xd << 0.0, 0.0, 0.0;  // I don't know why,,, but
   command_->b1d << 1.0, 0.0, 0.0; // without this init, drone crashes.
@@ -391,6 +393,29 @@ void ControllerNode::debugging_timer_callback() {
   debug_val_publisher_->publish(gui_msg);
 }
 
+void ControllerNode::pub_for_plot(){
+  controller_interfaces::msg::ControllerInfo msg;
+  msg.rot_des[0] = command_->Rd(0,0);
+  msg.rot_des[1] = -command_->Rd(0,1);
+  msg.rot_des[2] = -command_->Rd(0,2);
+  msg.rot_des[3] = -command_->Rd(1,0);
+  msg.rot_des[4] = command_->Rd(1,1);
+  msg.rot_des[5] = command_->Rd(1,2);
+  msg.rot_des[6] = -command_->Rd(2,0);
+  msg.rot_des[7] = command_->Rd(2,1);
+  msg.rot_des[8] = command_->Rd(2,2);
+  
+  msg.rot_mea[0] = state_->R(0,0);
+  msg.rot_mea[1] = -state_->R(0,1);
+  msg.rot_mea[2] = -state_->R(0,2);
+  msg.rot_mea[3] = -state_->R(1,0);
+  msg.rot_mea[4] = state_->R(1,1);
+  msg.rot_mea[5] = state_->R(1,2);
+  msg.rot_mea[6] = -state_->R(2,0);
+  msg.rot_mea[7] = state_->R(2,1);
+  msg.rot_mea[8] = state_->R(2,2);
+  publisher_for_plot_->publish(msg);
+}
 void ControllerNode::controller_loop() {
   constexpr auto period = std::chrono::microseconds(Loop_us);
   auto next_time = std::chrono::steady_clock::now() + period;
