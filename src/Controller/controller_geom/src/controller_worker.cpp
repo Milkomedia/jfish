@@ -44,12 +44,13 @@ ControllerNode::ControllerNode()
 
 void ControllerNode::controller_timer_callback() {
   double f_out_geom;
-  Vector3 M_out_geom;
+  Eigen::Vector3d M_out_geom;
   
   fdcl_controller_.position_control();
   fdcl_controller_.output_fM(f_out_geom, M_out_geom);
 
-  tau_tilde_star_ = M_out_geom; // uses prev d_hat
+  tau_tilde_star_.x() = M_out_geom.x();
+  tau_tilde_star_.y() = M_out_geom.y();
 
   if (estimator_state_ == 0) { // conventional
     F_out_pub_ = f_out_geom;
@@ -58,37 +59,17 @@ void ControllerNode::controller_timer_callback() {
   else if (estimator_state_ == 1) { // dob apply
     F_out_pub_ = f_out_geom;
     tau_tilde_star_ = tau_tilde_star_ - d_hat_;
-    M_out_pub_ = tau_tilde_star_;
+    M_out_pub_.x() = tau_tilde_star_.x();
+    M_out_pub_.y() = tau_tilde_star_.y();
+    M_out_pub_.z() = M_out_geom.z();
   }
   else if (estimator_state_ == 2){ // com estimator apply
     Eigen::Vector3d e_3_(0.0, 0.0, 1.0);
     Eigen::Vector3d acc = state_->a - g_ * state_->R * e_3_;
     Eigen::Vector3d F_star(0.0, 0.0, f_out_geom);
 
-    // 상태 (3차 버터워스 Q필터: 각 축별)
-    static double ax1=0.0, ax2=0.0, ax3=0.0; // x-axis
-    static double ay1=0.0, ay2=0.0, ay3=0.0; // y-axis
     static double az1=0.0, az2=0.0, az3=0.0; // z-axis
 
-    // --- X축 ---
-    double dx1 = -2.0*wc*ax1 - 2.0*w2*ax2 - w3*ax3 + acc.x();
-    double dx2 = ax1;
-    double dx3 = ax2;
-    ax1 += dx1 * DT;
-    ax2 += dx2 * DT;
-    ax3 += dx3 * DT;
-    double q_acc_x = w3 * ax3;  // Q(acc.x)
-
-    // --- Y축 ---
-    double dy1 = -2.0*wc*ay1 - 2.0*w2*ay2 - w3*ay3 + acc.y();
-    double dy2 = ay1;
-    double dy3 = ay2;
-    ay1 += dy1 * DT;
-    ay2 += dy2 * DT;
-    ay3 += dy3 * DT;
-    double q_acc_y = w3 * ay3;  // Q(acc.y)
-
-    // --- Z축 ---
     double dz1 = -2.0*wc*az1 - 2.0*w2*az2 - w3*az3 + acc.z();
     double dz2 = az1;
     double dz3 = az2;
@@ -97,27 +78,21 @@ void ControllerNode::controller_timer_callback() {
     az3 += dz3 * DT;
     double q_acc_z = w3 * az3;  // Q(acc.z)
 
-    Eigen::Vector3d Q_acc(q_acc_x, q_acc_y, q_acc_z);
-
-    Eigen::Matrix3d skew_acc;
-    skew_acc <<       0.0, -Q_acc.z(),   Q_acc.y(),
-                Q_acc.z(),        0.0,  -Q_acc.x(),
-               -Q_acc.y(),  Q_acc.x(),         0.0;
+    Eigen::Matrix2d skew_acc;
+    skew_acc <<       0.0, -q_acc_z,
+                  q_acc_z,      0.0;
     
-    Eigen::Matrix3d skew_F_star;
-    skew_F_star <<  0.0,         -F_star.z(),   F_star.y(),
-                    F_star.z(),          0.0,  -F_star.x(),
-                  -F_star.y(),   F_star.x(),          0.0;
-    
-    Eigen::Matrix3d Q_A_hat = m_bar_*skew_acc;
-    Eigen::Vector3d Pc_hat_dot = gamma_*Q_A_hat.transpose()*d_hat_;
+    Eigen::Matrix2d Q_A_hat = m_bar_*skew_acc;
+    Eigen::Vector2d Pc_hat_dot = gamma_*Q_A_hat.transpose()*d_hat_;
     Pc_hat_ += Pc_hat_dot*DT; // 1/s
-    Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector3d::Constant(-0.08))).cwiseMin(Eigen::Vector3d::Constant(0.08)); // saturation
+    Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector2d::Constant(-0.08))).cwiseMin(Eigen::Vector2d::Constant(0.08)); // saturation
     if ((Pc_hat_.array() == -0.08).any() || (Pc_hat_.array() == 0.08).any()) {RCLCPP_WARN(this->get_logger(), "Pc_hat_ saturated STOP");}
 
     F_out_pub_ = f_out_geom;
     tau_tilde_star_ = tau_tilde_star_ - d_hat_;
-    M_out_pub_ = tau_tilde_star_;
+    M_out_pub_.x() = tau_tilde_star_.x();
+    M_out_pub_.y() = tau_tilde_star_.y();
+    M_out_pub_.z() = M_out_geom.z();
   }
   else { // hoxy mola
     F_out_pub_ = f_out_geom;
@@ -139,8 +114,8 @@ void ControllerNode::controller_timer_callback() {
   controller_interfaces::msg::ControllerOutput msg;
   msg.force = F_out_pub_;
   msg.moment = {M_out_pub_[0], -M_out_pub_[1], -M_out_pub_[2]};
-  msg.d_hat = {d_hat_[0], -d_hat_[1], -d_hat_[2]};
-  msg.p_com = {Pc_hat_[0], -Pc_hat_[1], -Pc_hat_[2]};
+  msg.d_hat = {d_hat_[0], -d_hat_[1]};
+  msg.p_com = {Pc_hat_[0], -Pc_hat_[1]};
   controller_publisher_->publish(msg);
   // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]", prev_d_hat_[0], -prev_d_hat_[1], -prev_d_hat_[2]);
 }
@@ -211,8 +186,8 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 
   if(estimator_state_ != prev_estimator_state_){
     prev_estimator_state_ = estimator_state_;
-    d_hat_ =  Eigen::Vector3d::Zero();
-    Pc_hat_ =  Eigen::Vector3d::Zero();
+    d_hat_ =  Eigen::Vector2d::Zero();
+    Pc_hat_ =  Eigen::Vector2d::Zero();
     if     (estimator_state_==0){RCLCPP_INFO(this->get_logger(), "control mode -> [Conventional]");}
     else if(estimator_state_==1){RCLCPP_INFO(this->get_logger(), "control mode -> [DOB]");}
     else if(estimator_state_==2){RCLCPP_INFO(this->get_logger(), "control mode -> [CoM estimating]");}
@@ -271,17 +246,15 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz));
 }
 
-Eigen::Vector3d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector3d tau_tilde_star)
+Eigen::Vector2d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector2d tau_tilde_star)
 {
   // -------- 상태 (Block A: Q*s^2*J*q) --------
   static double x_r1=0.0, x_r2=0.0, x_r3=0.0; // roll
   static double x_p1=0.0, x_p2=0.0, x_p3=0.0; // pitch
-  static double x_y1=0.0, x_y2=0.0, x_y3=0.0; // yaw
 
   // -------- 상태 (Block B: Q*tau_tilde) --------
   static double y_r1=0.0, y_r2=0.0, y_r3=0.0; // roll
   static double y_p1=0.0, y_p2=0.0, y_p3=0.0; // pitch
-  static double y_y1=0.0, y_y2=0.0, y_y3=0.0; // yaw
 
   // ================= Roll =================
   double x_dot_r1 = -2.0*wc*x_r1 - 2.0*w2*x_r2 - w3*x_r3 + rpy.x();
@@ -321,28 +294,9 @@ Eigen::Vector3d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector3d t
 
   double dhat_p = tau_hat_p - Qtau_p;
 
-  // ================= Yaw =================
-  double x_dot_y1 = -2.0*wc*x_y1 - 2.0*w2*x_y2 - w3*x_y3 + rpy.z();
-  double x_dot_y2 = x_y1;
-  double x_dot_y3 = x_y2;
-  x_y1 += x_dot_y1 * DT;
-  x_y2 += x_dot_y2 * DT;
-  x_y3 += x_dot_y3 * DT;
-  double tau_hat_y = Jz * (w3 * x_y1);
-
-  double y_dot_y1 = -2.0*wc*y_y1 - 2.0*w2*y_y2 - w3*y_y3 + tau_tilde_star.z();
-  double y_dot_y2 = y_y1;
-  double y_dot_y3 = y_y2;
-  y_y1 += y_dot_y1 * DT;
-  y_y2 += y_dot_y2 * DT;
-  y_y3 += y_dot_y3 * DT;
-  double Qtau_y = w3 * y_y3;
-
-  double dhat_y = tau_hat_y - Qtau_y;
-
   // -------- 최종 외란 추정 --------
-  Eigen::Vector3d d_hat(dhat_r, dhat_p, dhat_y);
-  d_hat = (d_hat.cwiseMax(Eigen::Vector3d::Constant(-5.0))).cwiseMin(Eigen::Vector3d::Constant(5.0)); // saturation
+  Eigen::Vector2d d_hat(dhat_r, dhat_p);
+  d_hat = (d_hat.cwiseMax(Eigen::Vector2d::Constant(-5.0))).cwiseMin(Eigen::Vector2d::Constant(5.0)); // saturation
   return d_hat;
 }
 

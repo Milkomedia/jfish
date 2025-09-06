@@ -56,7 +56,7 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   // get [Mx My Mz F]
   Eigen::Vector4d Wrench;
   Wrench << msg->moment[0], msg->moment[1], msg->moment[2], msg->force;
-  Pc_ << msg->p_com[0], msg->p_com[1], msg->p_com[2]; 
+  Pc_ << msg->p_com[0], msg->p_com[1], 0; 
   // yaw wrench conversion
   tauz_bar_ = lpf_alpha_*Wrench(2) + lpf_beta_*tauz_bar_;
   double tauz_r = Wrench(2) - tauz_bar_;

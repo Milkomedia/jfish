@@ -81,7 +81,7 @@ private:
   void debugging_timer_callback();
   void controller_loop();
   void pub_for_plot();
-  Eigen::Vector3d DoB_update(Eigen::Vector3d rpy, Eigen::Vector3d tau_tilde_star);
+  Eigen::Vector2d DoB_update(Eigen::Vector3d rpy, Eigen::Vector2d tau_tilde_star);
 
   rclcpp::Subscription<sbus_interfaces::msg::SbusSignal>::SharedPtr sbus_subscription_;
   rclcpp::Subscription<mocap_interfaces::msg::MocapMeasured>::SharedPtr optitrack_mea_subscription_;
@@ -113,11 +113,11 @@ private:
   uint8_t prev_estimator_state_ = 0;
 
   // DOB state
-  Eigen::Vector3d d_hat_ = Eigen::Vector3d::Zero();
-  Eigen::Vector3d tau_tilde_star_ = Eigen::Vector3d::Zero();
+  Eigen::Vector2d d_hat_ = Eigen::Vector2d::Zero();
+  Eigen::Vector2d tau_tilde_star_ = Eigen::Vector2d::Zero();
 
   // CoM estimate state
-  Eigen::Vector3d Pc_hat_ = Eigen::Vector3d::Zero();
+  Eigen::Vector2d Pc_hat_ = Eigen::Vector2d::Zero();
   double m_bar_ = 8.0;
   double gamma_ = 0.0001;
   double g_ =9.80665;
