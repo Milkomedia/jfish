@@ -72,7 +72,7 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   else {C1_ = (A1.transpose()*A1 + 1e-8*Eigen::Matrix4d::Identity()).ldlt().solve(A1.transpose()*B1);}
 
   Eigen::Vector4d B2(0.0, 0.0, tauz_t, 0.0);
-  Eigen::Matrix4d A2 = calc_A2(C1_);
+  Eigen::Matrix4d A2 = calc_A2(C1_, C2_mea_);
 
   Eigen::FullPivLU<Eigen::Matrix4d> lu_2(A2);
   if (lu_2.isInvertible()) {C2_des_ = lu_2.solve(B2);}
@@ -131,10 +131,10 @@ Eigen::Matrix4d AllocatorWorker::calc_A1(const Eigen::Vector4d& C2) {
   A1(1,2) = inv_sqrt2 * (zeta - r3z + pcz) * s3  + (-r3x + pcx) * c3;
   A1(1,3) = inv_sqrt2 * (zeta - r4z + pcz) * s4  + (-r4x + pcx) * c4;
 
-  A1(2,0) = inv_sqrt2 * (pcx + pcy) * s1  + (zeta) * c1;
-  A1(2,1) = inv_sqrt2 * (-pcx + pcy) * s2 - (zeta) * c2;
-  A1(2,2) = inv_sqrt2 * (-pcx -pcy) * s3  + (zeta) * c3;
-  A1(2,3) = inv_sqrt2 * (pcx  - pcy) * s4 - (zeta) * c4;
+  A1(2,0) =  zeta * c1;
+  A1(2,1) = -zeta * c2;
+  A1(2,2) =  zeta * c3;
+  A1(2,3) = -zeta * c4;
 
   A1(3,0) = c1;
   A1(3,1) = c2;
@@ -144,8 +144,11 @@ Eigen::Matrix4d AllocatorWorker::calc_A1(const Eigen::Vector4d& C2) {
   return A1;
 }
 
-Eigen::Matrix4d AllocatorWorker::calc_A2(const Eigen::Vector4d& C1) {
+Eigen::Matrix4d AllocatorWorker::calc_A2(const Eigen::Vector4d& C1, const Eigen::Vector4d& C2) {
   Eigen::Matrix4d A2;
+
+  double pcx = Pc_(0); double pcy = Pc_(1);
+  double s1 = std::sin(C2(0)); double s2 = std::sin(C2(1)); double s3 = std::sin(C2(2)); double s4 = std::sin(C2(3));
 
   double f1 = C1(0); double f2 = C1(1); double f3 = C1(2); double f4 = C1(3);
 
@@ -164,10 +167,10 @@ Eigen::Matrix4d AllocatorWorker::calc_A2(const Eigen::Vector4d& C1) {
   A2(1,2) =  inv_sqrt2 * f3;
   A2(1,3) = -inv_sqrt2 * f4;
 
-  A2(2,0) = inv_sqrt2 * (-r1x - r1y) * f1;
-  A2(2,1) = inv_sqrt2 * ( r2x - r2y) * f2;
-  A2(2,2) = inv_sqrt2 * ( r3x + r3y) * f3;
-  A2(2,3) = inv_sqrt2 * (-r4x + r4y) * f4;
+  A2(2,0) = inv_sqrt2 * (pcx + pcy) * s1  + inv_sqrt2 * (-r1x - r1y) * f1;
+  A2(2,1) = inv_sqrt2 * (-pcx + pcy) * s2 + inv_sqrt2 * ( r2x - r2y) * f2;
+  A2(2,2) = inv_sqrt2 * (-pcx -pcy) * s3  + inv_sqrt2 * ( r3x + r3y) * f3;
+  A2(2,3) = inv_sqrt2 * (pcx  - pcy) * s4 + inv_sqrt2 * (-r4x + r4y) * f4;
 
   A2(3,0) = inv_sqrt2 * (-r1x - r1y) * f1;
   A2(3,1) = inv_sqrt2 * (-r2x + r2y) * f2;
