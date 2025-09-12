@@ -190,24 +190,40 @@ void ArmChangerWorker::estimator_callback(const controller_interfaces::msg::Esti
 
 std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, const Eigen::Vector3d &heading_input){
   Eigen::Vector3d heading = heading_input.normalized();  // Normalize
-    const double a1_ = 134.;
+  const double a1_ = 134.;
   const double a2_ = 115.;
   const double a3_ = 110.;
   const double a4_ = 24.;
   const double a5_ = 68.;
+
+  const double EPS = 1e-12;
+
   //Eigen::Vector3d p05(x, y, z);
   Eigen::Vector3d p04 = p05 - a5_ * heading;
-  Eigen::Vector3d p03 = p04 - a4_ * heading;
 
   // θ1
-  double th1 = std::atan2(p03(1), p03(0));
+  double th1 = std::atan2(p04(1), p04(0));
+
+  // θ5
+  const double cross_z = p04.x() * heading.y() - p04.y() * heading.x();
+  const double denom_xy = std::hypot(p04.x(), p04.y()) + EPS;
+  double th5 = -std::acos(std::clamp(std::abs(cross_z) / denom_xy, -1.0, 1.0));
+
+  if (th5 <= M_PI / 2.0) th5 += M_PI / 2.0;
+  if (p04.x() * p05.y() - p04.y() * p05.x() > 0.0) th5 = -th5;
+
+  Eigen::Vector3d heading_projected = heading - std::sin(th5) * Eigen::Vector3d(std::sin(th1), -std::cos(th1), 0.0);
+  if (heading_projected.norm() > EPS) heading_projected /= heading_projected.norm();
 
   Eigen::Vector3d p01(a1_ * std::cos(th1), a1_ * std::sin(th1), 0);
+  Eigen::Vector3d p34 = a4_ * heading_projected;
+  Eigen::Vector3d p03 = p04 - p34;
   Eigen::Vector3d p31 = p03 - p01;
-  double r = std::sqrt(std::pow(p31(0), 2) + std::pow(p31(1), 2));
-  double s = p31(2);
+  
 
   // θ3
+  double r = std::sqrt(std::pow(p31(0), 2) + std::pow(p31(1), 2));
+  double s = p31(2);
   double D = (r * r + s * s - a2_ * a2_ - a3_ * a3_) / (2 * a2_ * a3_);
   D = std::clamp(D, -1.0, 1.0);
   double th3 = std::acos(D);
@@ -220,19 +236,20 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, c
   // θ4
   Eigen::Matrix3d R03 = R01(th1) * R12(th2) * R23(th3);
   Eigen::Vector3d x3 = R03.col(0);
-  Eigen::Vector3d x4_desired = (p04 - p03).normalized();
-  double th4 = std::acos(std::clamp(x3.dot(x4_desired), -1.0, 1.0));
+  Eigen::Vector3d z3 = R03.col(2);
 
-  // θ5
-  Eigen::Matrix3d R04 = R03 * R34(th4);
-  Eigen::Vector3d x4 = R04.col(0);
-  Eigen::Vector3d cross = x4.cross(heading);
-  double sign = std::copysign(1.0, R04.col(2).dot(cross));
-  double dot = std::clamp(x4.dot(heading), -1.0, 1.0);
-  double th5 = sign * std::acos(dot);
+  Eigen::Vector3d x4_des = p34;
+  const double x4n = x4_des.norm();
+  if (x4n > EPS) x4_des /= x4n;           // x4_des = p34 / ||p34||
+
+  double c4 = std::clamp(x3.dot(x4_des), -1.0, 1.0);
+  double s4 = z3.dot(x3.cross(x4_des));
+  const double th4 = std::atan2(s4, c4);
+  
   //RCLCPP_WARN(this->get_logger(), "%f %f %f %f %f", th1, th2, th3, th4, th5);
   return {th1, th2, th3, th4, th5};
 }
+
 
 bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const{
   
@@ -269,7 +286,7 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double a[5]     = {DH_a1_, DH_a2_, DH_a3_, DH_a4_, DH_a5_};
   const double alpha[5] = {M_PI/2, 0.0, 0.0, M_PI/2, 0.0};
   const double d[5]     = {0.0, 0.0, 0.0, 0.0, 0.0};
- const double th[5]    = {q[0], q[1], q[2], q[3], q[4]};
+  const double th[5]    = {q[0], q[1], q[2], q[3], q[4]};
 
   Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
   for (int i = 0; i < 5; ++i) T *= T_dh(a[i], alpha[i], d[i], th[i]);
@@ -285,9 +302,9 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double pos_err = (pos_fk - pos_des).norm();
   const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
-  //RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
+  // RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
 
-  //return (pos_err <= 10.0 && (ang_err <= 0.1745));  //10mm & 10 deg 
+  return (pos_err <= 5.0 && (ang_err <= 0.1745));  //10mm & 10 deg 
   return true;
 }
 
