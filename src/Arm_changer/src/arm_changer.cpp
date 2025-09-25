@@ -34,10 +34,10 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   Eigen::Vector3d heading4(0.0, std::sin(C2_(3)), std::sqrt(1-std::sin(C2_(3))*std::sin(C2_(3)))); // arm4
 
   // //arm postion [mm]
-  Eigen::Vector3d arm_position1(280.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  180.0); //arm1
-  Eigen::Vector3d arm_position2(280.0 + half_sqrt2*(+delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual+delta_y_manual),  180.0); //arm2
-  Eigen::Vector3d arm_position3(280.0 + half_sqrt2*(+delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual+delta_y_manual),  180.0); //arm3
-  Eigen::Vector3d arm_position4(280.0 + half_sqrt2*(-delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual-delta_y_manual),  180.0); //arm4
+  Eigen::Vector3d arm_position1(220.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  220.0); //arm1
+  Eigen::Vector3d arm_position2(220.0 + half_sqrt2*(+delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual+delta_y_manual),  220.0); //arm2
+  Eigen::Vector3d arm_position3(220.0 + half_sqrt2*(+delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual+delta_y_manual),  220.0); //arm3
+  Eigen::Vector3d arm_position4(220.0 + half_sqrt2*(-delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual-delta_y_manual),  220.0); //arm4
 
   //Base(J1) 2 Body(base)
   auto [arm_position1_body, heading1_body] = arm2body(arm_position1, heading1, 1);
@@ -46,10 +46,10 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   auto [arm_position4_body, heading4_body] = arm2body(arm_position4, heading4, 4);
 
   //workspace check (Base frame 1 by 1 )
-  // if(!workspace_check(arm_position1_body)) return;
-  // if(!workspace_check(arm_position2_body)) return;
-  // if(!workspace_check(arm_position3_body)) return;
-  // if(!workspace_check(arm_position4_body)) return;
+  if(!workspace_check(arm_position1_body))  
+  if(!workspace_check(arm_position2_body)) 
+  if(!workspace_check(arm_position3_body)) 
+  if(!workspace_check(arm_position4_body)) 
 
   //Collision check (Body frame) 
   if (!collision_check(arm_position1_body, arm_position2_body, arm_position3_body, arm_position4_body)) {
@@ -204,8 +204,9 @@ bool ArmChangerWorker::workspace_check(const Eigen::Vector3d& pos) const {
 
   const bool radial_ok = (r >= rmin && r <= rmax);
   const bool angle_ok  = (std::abs(ang_x) <= LIM && std::abs(ang_y) <= LIM);
-  if(!radial_ok) RCLCPP_WARN(this->get_logger(), "out of workspace!(r) → heartbeat disabled!");
-  if(!angle_ok) RCLCPP_WARN(this->get_logger(), "out of workspace!(a) → heartbeat disabled!");
+  RCLCPP_WARN(this->get_logger(), "%f %f %f | %f %f %f | %f %f %f|", pos.x(),pos.y(),pos.z(),r, rmin, rmax, ang_x, ang_y, LIM);
+  // if(!radial_ok) RCLCPP_WARN(this->get_logger(), "out of workspace!(r) → heartbeat disabled!");
+  // if(!angle_ok) RCLCPP_WARN(this->get_logger(), "out of workspace!(a) → heartbeat disabled!");
 
   return radial_ok && angle_ok;
 }
@@ -232,7 +233,7 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, c
   double th5 = -std::acos(std::clamp(std::abs(cross_z) / denom_xy, -1.0, 1.0));
 
   if (th5 <= M_PI / 2.0) th5 += M_PI / 2.0;
-  if (p04.x() * p05.y() - p04.y() * p05.x() > 0.0) th5 = -th5;
+  if (p04.x() * p05.y() - p04.y() * p05.x() < 0.0) th5 = -th5;
 
   Eigen::Vector3d heading_projected = heading - std::sin(th5) * Eigen::Vector3d(std::sin(th1), -std::cos(th1), 0.0);
   if (heading_projected.norm() > EPS) heading_projected /= heading_projected.norm();
