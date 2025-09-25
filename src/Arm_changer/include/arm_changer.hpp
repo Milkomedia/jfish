@@ -31,6 +31,7 @@ private:
   void TiltAngle_callback(const allocator_interfaces::msg::TiltAngleVal::SharedPtr msg);
 
   //check funtion
+  bool workspace_check(const Eigen::Vector3d& pos) const;
   bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const;
   bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const;
   bool collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const;
