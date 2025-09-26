@@ -31,7 +31,7 @@ private:
   void TiltAngle_callback(const allocator_interfaces::msg::TiltAngleVal::SharedPtr msg);
 
   //check funtion
-  bool workspace_check(const Eigen::Vector3d& pos) const;
+  bool workspace_check(const Eigen::Vector3d& pos, int arm_num) const;
   bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const;
   bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const;
   bool collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const;
@@ -65,10 +65,10 @@ private:
 
 
   // workspace constrain
-  double x_min_ = -45.0; 
-  double x_max_ =  45.0;
-  double y_min_ = -45.0;
-  double y_max_ =  45.0;  
+  double x_min_ = -60.0; 
+  double x_max_ =  60.0;
+  double y_min_ = -60.0;
+  double y_max_ =  60.0;  
 
   Eigen::VectorXd a1_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]
   Eigen::VectorXd a2_q_ = (Eigen::VectorXd(5) << 0., 0.095993089, 0.67544228, 0.806341947, 0.0).finished(); // [rad]
