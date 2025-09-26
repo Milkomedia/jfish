@@ -49,10 +49,10 @@ static const double Jy = 0.3;
 static const double Jz = 0.5318;
 
 // workspace constrain
-double x_min_ = -0.045; // [m] 
-double x_max_ =  0.045;
-double y_min_ = -0.045;
-double y_max_ =  0.045; 
+double x_min_ =  0.; 
+double x_max_ =  0.;
+double y_min_ = -40.0;
+double y_max_ =  40.0; 
 
 static inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
   return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;

@@ -43,10 +43,10 @@ class MuJoCoSimulatorNode(Node):
         # Initialize motor thrust and moments
         self.motor_thrusts = [0.0, 0.0, 0.0, 0.0]
         self.motor_moments = [0.0, 0.0, 0.0, 0.0]
-        self.a1_des = [0., 0.095993089, 0.67544228, 0.806341947, 0.0]
-        self.a2_des = [0., 0.095993089, 0.67544228, 0.806341947, 0.0]
-        self.a3_des = [0., 0.095993089, 0.67544228, 0.806341947, 0.0]
-        self.a4_des = [0., 0.095993089, 0.67544228, 0.806341947, 0.0]
+        self.a1_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
+        self.a2_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
+        self.a3_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
+        self.a4_des = [0.0, -0.84522, 1.50944, 0.90812, 0.0]
 
         # Start MuJoCo viewer
         self.viewer_thread = threading.Thread(target=self.run_viewer, daemon=True)

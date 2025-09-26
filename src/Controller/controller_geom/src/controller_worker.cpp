@@ -133,17 +133,10 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   sbus_chnl_[8] = msg->ch[11]; // right-dial
   sbus_chnl_[9] = msg->ch[5];  // paddle
   
-  double delta_x_manual = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_); // [m]
-  double delta_y_manual = map(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_); // [m]
-
   // remap SBUS data to double <pos x,y,z in [m]>
   ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
   ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) * mapping_factor_xy;  // [m]
-  ref_[2] = static_cast<double>(352 - sbus_chnl_[3])  * mapping_factor_z;   // [m]
-
-  const double yaw_w = yaw_[0];
-  const double dHx = std::cos(yaw_w) * delta_x_manual - std::sin(yaw_w) * delta_y_manual;
-  const double dHy = std::sin(yaw_w) * delta_x_manual + std::cos(yaw_w) * delta_y_manual;
+  ref_[2] = static_cast<double>(352 - sbus_chnl_[3])  * mapping_factor_z; // [m]
 
   // remap SBUS data to double <yaw-heading in [rad]>
   double delta_yaw = (sbus_chnl_[2] < 1018 || sbus_chnl_[2] > 1030) 
@@ -154,14 +147,11 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   if (ref_[3] < 0) {ref_[3] += two_PI;}
   ref_[3] -= M_PI;
   
-  // 여기 +-0.045m 만큼 home 좌표계 바이어스 잡아줌
-  command_->xd << (ref_[0] - dHx), (ref_[1] - dHy), ref_[2];
+  command_->xd << ref_[0], ref_[1], ref_[2];
   command_->xd_dot.setZero();
   command_->xd_2dot.setZero();
   command_->xd_3dot.setZero();
   command_->xd_4dot.setZero();
-
-  RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f]", ref_[0] - dHx, ref_[1] - dHy);
 
   command_->b1d << std::cos(ref_[3]), std::sin(ref_[3]), 0.0;
   command_->b1d_dot.setZero();
