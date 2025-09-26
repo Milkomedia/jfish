@@ -26,6 +26,9 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   double delta_x_manual = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_);
   double delta_y_manual = map(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_);
   //RCLCPP_INFO(this->get_logger(), "x: %.4f, y: %.4f", delta_x_manual, delta_y_manual);  
+
+  delta_x_manual = -delta_x_manual;
+  delta_y_manual = -delta_y_manual;
   
   //heading angle [rad]
   Eigen::Vector3d heading1(0.0, std::sin(C2_(0)), std::sqrt(1-std::sin(C2_(0))*std::sin(C2_(0)))); // arm1
@@ -33,11 +36,17 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   Eigen::Vector3d heading3(0.0, std::sin(C2_(2)), std::sqrt(1-std::sin(C2_(2))*std::sin(C2_(2)))); // arm3
   Eigen::Vector3d heading4(0.0, std::sin(C2_(3)), std::sqrt(1-std::sin(C2_(3))*std::sin(C2_(3)))); // arm4
 
-  // //arm postion [mm]
-  Eigen::Vector3d arm_position1(220.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  220.0); //arm1
+  // sim postion [mm]
+  Eigen::Vector3d arm_position1(220.0 + half_sqrt2*(+delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual+delta_y_manual),  220.0); //arm1
   Eigen::Vector3d arm_position2(220.0 + half_sqrt2*(+delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual+delta_y_manual),  220.0); //arm2
-  Eigen::Vector3d arm_position3(220.0 + half_sqrt2*(+delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual+delta_y_manual),  220.0); //arm3
+  Eigen::Vector3d arm_position3(220.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  220.0); //arm3
   Eigen::Vector3d arm_position4(220.0 + half_sqrt2*(-delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual-delta_y_manual),  220.0); //arm4
+
+  // real arm [mm]
+  // Eigen::Vector3d arm_position1(220.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  220.0); //arm1
+  // Eigen::Vector3d arm_position2(220.0 + half_sqrt2*(+delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual+delta_y_manual),  220.0); //arm2
+  // Eigen::Vector3d arm_position3(220.0 + half_sqrt2*(+delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual+delta_y_manual),  220.0); //arm3
+  // Eigen::Vector3d arm_position4(220.0 + half_sqrt2*(-delta_x_manual+delta_y_manual),   half_sqrt2*(-delta_x_manual-delta_y_manual),  220.0); //arm4
 
   //Base(J1) 2 Body(base)
   auto [arm_position1_body, heading1_body] = arm2body(arm_position1, heading1, 1);
@@ -204,7 +213,7 @@ bool ArmChangerWorker::workspace_check(const Eigen::Vector3d& pos) const {
 
   const bool radial_ok = (r >= rmin && r <= rmax);
   const bool angle_ok  = (std::abs(ang_x) <= LIM && std::abs(ang_y) <= LIM);
-  RCLCPP_WARN(this->get_logger(), "%f %f %f | %f %f %f | %f %f %f|", pos.x(),pos.y(),pos.z(),r, rmin, rmax, ang_x, ang_y, LIM);
+  // RCLCPP_WARN(this->get_logger(), "%f %f %f | %f %f %f | %f %f %f|", pos.x(),pos.y(),pos.z(),r, rmin, rmax, ang_x, ang_y, LIM);
   // if(!radial_ok) RCLCPP_WARN(this->get_logger(), "out of workspace!(r) → heartbeat disabled!");
   // if(!angle_ok) RCLCPP_WARN(this->get_logger(), "out of workspace!(a) → heartbeat disabled!");
 
