@@ -34,6 +34,12 @@ ControllerNode::ControllerNode()
              0.0006,  0.3, 0.0006,
              0.0006, 0.0006, 0.5318;
 
+  thrust_min_pct_    = this->declare_parameter<double>("thrust_min_pct", thrust_min_pct_);
+  floor_after_resume_ = this->declare_parameter<bool>("thrust_floor_after_resume", floor_after_resume_);
+
+  f_min_abs_ = thrust_min_pct_ * m_bar_ * g_;
+ RCLCPP_INFO(this->get_logger(), "[Thrust floor] f_min_abs=%.3f N", f_min_abs_);
+
   // main-tasking thread starts
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
 
@@ -108,11 +114,38 @@ void ControllerNode::controller_timer_callback() {
   else           {overriding_coeff_ += turnon_coeff_;} // resume
   overriding_coeff_ = std::clamp(overriding_coeff_, 0.0, 1.0);
   M_out_pub_ = overriding_coeff_ * M_out_pub_;
-  F_out_pub_ = overriding_coeff_ * F_out_pub_;
+  // F_out_pub_ = overriding_coeff_ * F_out_pub_;
+
+  double F_cmd = overriding_coeff_ * F_out_pub_;
+
+  if (is_paused_) {
+    // 아직 RESUME 안 한 상태 → 무조건 20% 이상
+    if (F_cmd < f_min_abs_) F_cmd = f_min_abs_;
+  } else {
+    if (floor_after_resume_ && F_cmd < f_min_abs_) {
+      F_cmd = f_min_abs_;
+    }
+  }
+
+  if (kill_active_.load(std::memory_order_relaxed)) {
+    F_cmd = 0.0;
+    M_out_pub_.setZero();
+  } else {
+    if (is_paused_) {
+      if (F_cmd < f_min_abs_) F_cmd = f_min_abs_;
+    } else {
+      if (floor_after_resume_ && F_cmd < f_min_abs_) {
+        F_cmd = f_min_abs_;
+      }
+    }
+  }
+
+  F_cmd_pub_.store(F_cmd, std::memory_order_relaxed);
 
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
-  msg.force = F_out_pub_;
+  // msg.force = F_out_pub_;
+  msg.force = F_cmd;
   msg.moment = {M_out_pub_[0], -M_out_pub_[1], -M_out_pub_[2]};
   msg.d_hat = {d_hat_[0], -d_hat_[1]};
   msg.p_com = {Pc_hat_[0], -Pc_hat_[1]};
@@ -132,11 +165,20 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   sbus_chnl_[7] = msg->ch[10]; // left-dial
   sbus_chnl_[8] = msg->ch[11]; // right-dial
   sbus_chnl_[9] = msg->ch[5];  // paddle
+
+  kill_active_.store(sbus_chnl_[4] == 1696 /*or your kill condition*/, std::memory_order_relaxed);
   
   // remap SBUS data to double <pos x,y,z in [m]>
   ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
   ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) * mapping_factor_xy;  // [m]
   ref_[2] = static_cast<double>(352 - sbus_chnl_[3])  * mapping_factor_z; // [m]
+
+  double delta_x_manual = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_); // [m]
+  double delta_y_manual = map(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_); // [m]
+
+  const double yaw_w = yaw_[0];
+  const double dHx = std::cos(yaw_w) * delta_x_manual - std::sin(yaw_w) * delta_y_manual;
+  const double dHy = std::sin(yaw_w) * delta_x_manual + std::cos(yaw_w) * delta_y_manual;
 
   // remap SBUS data to double <yaw-heading in [rad]>
   double delta_yaw = (sbus_chnl_[2] < 1018 || sbus_chnl_[2] > 1030) 
@@ -147,7 +189,8 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   if (ref_[3] < 0) {ref_[3] += two_PI;}
   ref_[3] -= M_PI;
   
-  command_->xd << ref_[0], ref_[1], ref_[2];
+  // command_->xd << ref_[0], ref_[1], ref_[2];
+  command_->xd << (ref_[0] + dHx), (ref_[1] + dHy), ref_[2]; // arm_changer 움직이는 반대 방향으로 cmd에 +
   command_->xd_dot.setZero();
   command_->xd_2dot.setZero();
   command_->xd_3dot.setZero();
@@ -156,6 +199,8 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   command_->b1d << std::cos(ref_[3]), std::sin(ref_[3]), 0.0;
   command_->b1d_dot.setZero();
   command_->b1d_ddot.setZero();
+
+  // RCLCPP_WARN(this->get_logger(), "x %f, y %f", ref_[0] + dHx, ref_[1] + dHy);
 
   if      (sbus_chnl_[6]==352){estimator_state_ = 0;}  // conventional
   else if(sbus_chnl_[6]==1024){estimator_state_ = 1;}  // dob
@@ -330,7 +375,8 @@ void ControllerNode::debugging_timer_callback() {
   gui_msg.pos_cmd[2] = -ref_[2]; // z
   gui_msg.pos_cmd[3] = -ref_[3]; // yaw
 
-  gui_msg.wrench_des[0] = F_out_pub_;
+  // gui_msg.wrench_des[0] = F_out_pub_;
+  gui_msg.wrench_des[0] = F_cmd_pub_.load(std::memory_order_relaxed); 
   gui_msg.wrench_des[1] = M_out_pub_[0];
   gui_msg.wrench_des[2] = -M_out_pub_[1];
   gui_msg.wrench_des[3] = -M_out_pub_[2];

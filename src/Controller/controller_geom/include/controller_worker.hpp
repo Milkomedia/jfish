@@ -49,10 +49,10 @@ static const double Jy = 0.3;
 static const double Jz = 0.5318;
 
 // workspace constrain
-double x_min_ =  0.; 
-double x_max_ =  0.;
-double y_min_ = -40.0;
-double y_max_ =  40.0; 
+double x_min_ = -0.06; // [m]
+double x_max_ =  0.06; // [m]
+double y_min_ = -0.06; // [m]
+double y_max_ =  0.06; // [m]
 
 static inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
   return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
@@ -69,6 +69,9 @@ private:
 
   std::atomic<bool> thread_running_;
   std::thread controller_thread_;
+
+  std::atomic<bool> kill_active_{false};
+  std::atomic<double> F_cmd_pub_{0.0};
 
   fdcl::control fdcl_controller_;
 
@@ -98,6 +101,10 @@ private:
 
   rclcpp::Publisher<controller_interfaces::msg::ControllerInfo>::SharedPtr publisher_for_plot_;
   rclcpp::TimerBase::SharedPtr plot_timer_;
+
+  double f_min_abs_ = 0.0;      // [N] 절대 추력 하한
+  double thrust_min_pct_ = 0.5;
+  bool   floor_after_resume_ = true; // RESUME 이후에도 하한 유지 여부
 
   // pause&resume variable
   bool is_paused_ = true; // false->resume(flight-available) / true->pause

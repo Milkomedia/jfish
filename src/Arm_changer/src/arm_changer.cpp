@@ -94,7 +94,7 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
 
   //IK check
   if (!ik_check(a1_radians, arm_position1, heading1) || !ik_check(a2_radians, arm_position2, heading2) || !ik_check(a3_radians, arm_position3, heading3) || !ik_check(a4_radians, arm_position4, heading4)) {
-      hb_enabled_ = false;
+      // hb_enabled_ = false;
       RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
       return;
   }
