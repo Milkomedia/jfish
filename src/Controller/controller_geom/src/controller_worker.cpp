@@ -34,12 +34,6 @@ ControllerNode::ControllerNode()
              0.0006,  0.3, 0.0006,
              0.0006, 0.0006, 0.5318;
 
-  thrust_min_pct_    = this->declare_parameter<double>("thrust_min_pct", thrust_min_pct_);
-  floor_after_resume_ = this->declare_parameter<bool>("thrust_floor_after_resume", floor_after_resume_);
-
-  f_min_abs_ = thrust_min_pct_ * m_bar_ * g_;
- RCLCPP_INFO(this->get_logger(), "[Thrust floor] f_min_abs=%.3f N", f_min_abs_);
-
   // main-tasking thread starts
   controller_thread_ = std::thread(&ControllerNode::controller_loop, this);
 
@@ -111,36 +105,43 @@ void ControllerNode::controller_timer_callback() {
   d_hat_ = DoB_update(RPY, tau_tilde_star_);
 
   if (is_paused_){overriding_coeff_ -= turnoff_coeff_;} // pause
-  else           {overriding_coeff_ += turnon_coeff_;} // resume
+  else           {overriding_coeff_ += turnon_coeff_;}  // resume
   overriding_coeff_ = std::clamp(overriding_coeff_, 0.0, 1.0);
   M_out_pub_ = overriding_coeff_ * M_out_pub_;
-  // F_out_pub_ = overriding_coeff_ * F_out_pub_;
+  
+  const double pwm_target = (run_up_state_ == 2) ? init_pwm_ : 0.0;
+  pwm_state_ = LPF_alpha_ * pwm_target + LPF_beta_ * pwm_state_;
+  pwm_state_ = std::clamp(pwm_state_, 0.0, init_pwm_);
 
-  double F_cmd = overriding_coeff_ * F_out_pub_;
-
-  if (is_paused_) {
-    // 아직 RESUME 안 한 상태 → 무조건 20% 이상
-    if (F_cmd < f_min_abs_) F_cmd = f_min_abs_;
-  } else {
-    if (floor_after_resume_ && F_cmd < f_min_abs_) {
-      F_cmd = f_min_abs_;
+  if (is_paused_ && run_up_state_ == 2) {
+    if (!is_runup_ && pwm_state_ >= init_pwm_ - 1e-4) {
+      is_runup_ = true;
+      RCLCPP_WARN(this->get_logger(), "-- [ RUN UP IS READY ] --");
     }
-  }
+  } else {is_runup_ = false;}
 
-  if (kill_active_.load(std::memory_order_relaxed)) {
-    F_cmd = 0.0;
-    M_out_pub_.setZero();
-  } else {
-    if (is_paused_) {
-      if (F_cmd < f_min_abs_) F_cmd = f_min_abs_;
+  const double F_base  = overriding_coeff_ * F_out_pub_;
+  const double F_floor = pwm2total_thrust(pwm_state_);
+
+  double F_cmd;
+
+  if (!is_paused_) {
+    if (floor_after_resume_ || run_up_state_ == 2) {
+      F_cmd = std::max(F_base, F_floor);
     } else {
-      if (floor_after_resume_ && F_cmd < f_min_abs_) {
-        F_cmd = f_min_abs_;
-      }
+      F_cmd = F_base;
+    }
+  } else {
+    if (run_up_state_ == 2) {
+      F_cmd = std::max(F_base, F_floor);
+    } else {
+      F_cmd = F_base;
     }
   }
 
+  // GUI/디버그용 복사
   F_cmd_pub_.store(F_cmd, std::memory_order_relaxed);
+
 
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
@@ -165,8 +166,6 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   sbus_chnl_[7] = msg->ch[10]; // left-dial
   sbus_chnl_[8] = msg->ch[11]; // right-dial
   sbus_chnl_[9] = msg->ch[5];  // paddle
-
-  kill_active_.store(sbus_chnl_[4] == 1696 /*or your kill condition*/, std::memory_order_relaxed);
   
   // remap SBUS data to double <pos x,y,z in [m]>
   ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
@@ -202,9 +201,13 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
 
   // RCLCPP_WARN(this->get_logger(), "x %f, y %f", ref_[0] + dHx, ref_[1] + dHy);
 
-  if      (sbus_chnl_[6]==352){estimator_state_ = 0;}  // conventional
-  else if(sbus_chnl_[6]==1024){estimator_state_ = 1;}  // dob
-  else if(sbus_chnl_[6]==1696){estimator_state_ = 2;}  // com
+  if      (sbus_chnl_[6]==352){estimator_state_ = 0;}   // conventional
+  else if (sbus_chnl_[6]==1024){estimator_state_ = 1;}  // dob
+  else if (sbus_chnl_[6]==1696){estimator_state_ = 2;}  // com
+
+  if      (sbus_chnl_[5] ==  352){run_up_state_ = 0;}
+  else if (sbus_chnl_[5] == 1024){run_up_state_ = 1;}  
+  else if (sbus_chnl_[5] == 1696){run_up_state_ = 2;}  // thrust run up
 
   if      (sbus_chnl_[9]==352){ // paddle normal
     if     (prev_paddle_state_ == 0){paddle_holding_cnt_ = 0;}
@@ -236,6 +239,11 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
     if     (estimator_state_==0){RCLCPP_INFO(this->get_logger(), "control mode -> [Conventional]");}
     else if(estimator_state_==1){RCLCPP_INFO(this->get_logger(), "control mode -> [DOB]");}
     else if(estimator_state_==2){RCLCPP_INFO(this->get_logger(), "control mode -> [CoM estimating]");}
+  }
+
+  if(run_up_state_ != prev_run_up_state_){
+    prev_run_up_state_ = run_up_state_;
+    if     (run_up_state_==2){RCLCPP_INFO(this->get_logger(), "-- [ RUN UP START ] --");}
   }
 }
 

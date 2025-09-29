@@ -39,7 +39,7 @@ constexpr double X_offset = 0.0; // [m]
 constexpr double Y_offset = 0.6; // [m] 
 constexpr double Z_offset = 0.0; // [m] it must be (+) sign.
 
-static const double DT = 0.0025;     // [s] 400 Hz
+static const double DT = 0.0025;    // [s] 400 Hz
 static const double fc = 0.3;       // [Hz] Butterworth cutoff
 const double wc = 2.0 * M_PI * fc;  // ωc
 const double w2 = wc * wc;
@@ -53,6 +53,29 @@ double x_min_ = -0.06; // [m]
 double x_max_ =  0.06; // [m]
 double y_min_ = -0.06; // [m]
 double y_max_ =  0.06; // [m]
+
+// init thrust
+constexpr double PWM_alpha_ = 70.;
+constexpr double PWM_beta_ = 8.;
+const double LPF_alpha_ = 0.001;           // Low-pass filter coefficient
+const double LPF_beta_ = 1.0 - LPF_alpha_; // Low-pass filter coefficient
+double init_pwm_ = 0.2;                    // init goal PWM
+double pwm_state_  = 0.0;
+
+inline double pwm2thrust(double pwm) {
+   return PWM_alpha_ * pwm * pwm + PWM_beta_;
+ }
+
+inline double thrust2pwm(double thrust) {
+  double v = (thrust - PWM_beta_) / PWM_alpha_;
+  if (v <= 0.0) return 0.0;
+  return std::sqrt(v);
+}
+
+inline double pwm2total_thrust(double pwm) {
+  return 4.0 * pwm2thrust(pwm);
+}
+
 
 static inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
   return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
@@ -68,10 +91,8 @@ private:
   fdcl::command_t * command_;
 
   std::atomic<bool> thread_running_;
-  std::thread controller_thread_;
-
-  std::atomic<bool> kill_active_{false};
   std::atomic<double> F_cmd_pub_{0.0};
+  std::thread controller_thread_;
 
   fdcl::control fdcl_controller_;
 
@@ -102,12 +123,10 @@ private:
   rclcpp::Publisher<controller_interfaces::msg::ControllerInfo>::SharedPtr publisher_for_plot_;
   rclcpp::TimerBase::SharedPtr plot_timer_;
 
-  double f_min_abs_ = 0.0;      // [N] 절대 추력 하한
-  double thrust_min_pct_ = 0.5;
-  bool   floor_after_resume_ = true; // RESUME 이후에도 하한 유지 여부
-
   // pause&resume variable
   bool is_paused_ = true; // false->resume(flight-available) / true->pause
+  bool is_runup_ = true;  // false->not yet / true->thrust run up ready
+  bool floor_after_resume_ = true; // RESUME 이후에도 하한 유지 여부
   uint8_t prev_paddle_state_ = 0; // 0->paddle normal / 1->paddle pushed
   uint8_t paddle_holding_cnt_ = 0;
   const uint8_t minimum_holding_time_ = 4;
@@ -118,6 +137,8 @@ private:
 
   uint8_t estimator_state_ = 0; // 0->conventional / 1->dob / 2->com
   uint8_t prev_estimator_state_ = 0;
+  uint8_t run_up_state_ = 0; // 0->thrust 0 / 1->thrust 0 /  2->run-up
+  uint8_t prev_run_up_state_ = 0;
 
   // DOB state
   Eigen::Vector2d d_hat_ = Eigen::Vector2d::Zero();
