@@ -23,9 +23,18 @@ ArmChangerWorker::ArmChangerWorker(): Node("arm_changing_node") {
 }
 
 void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::SharedPtr msg) {
-  double delta_x_manual = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_);
-  double delta_y_manual = map(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_);
-  //RCLCPP_INFO(this->get_logger(), "x: %.4f, y: %.4f", delta_x_manual, delta_y_manual);  
+
+  if(!hb_enabled_) return;
+  
+  if(checksum_on){
+    delta_x_manual = delta_x_;
+    delta_y_manual = delta_y_;
+  }
+  else {
+    delta_x_manual = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_);
+    delta_y_manual = map(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_);
+    //RCLCPP_INFO(this->get_logger(), "x: %.4f, y: %.4f", delta_x_manual, delta_y_manual);  
+  }
   
   //heading angle [rad]
   Eigen::Vector3d heading1(0.0, std::sin(C2_(0)), std::sqrt(1-std::sin(C2_(0))*std::sin(C2_(0)))); // arm1
@@ -47,9 +56,10 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
 
   //workspace check (Base frame 1 by 1 )
   if(!workspace_check(arm_position1,1)||!workspace_check(arm_position2,2)||!workspace_check(arm_position3,3)||!workspace_check(arm_position4,4)){
-    hb_enabled_ = false;
+    checksum_on = true;
     return;
   } 
+  else checksum_on = false;
 
   //Collision check (Body frame) 
   if (!collision_check(arm_position1_body, arm_position2_body, arm_position3_body, arm_position4_body)) {
@@ -93,11 +103,14 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   auto a4_radians = compute_ik(arm_position4, heading4); //[rad rad rad rad rad]
 
   //IK check
-  if (!ik_check(a1_radians, arm_position1, heading1) || !ik_check(a2_radians, arm_position2, heading2) || !ik_check(a3_radians, arm_position3, heading3) || !ik_check(a4_radians, arm_position4, heading4)) {
-      // hb_enabled_ = false;
+  if (!ik_check(a1_radians, arm_position1, heading1, 1) || !ik_check(a2_radians, arm_position2, heading2, 2) || !ik_check(a3_radians, arm_position3, heading3, 3) || !ik_check(a4_radians, arm_position4, heading4, 4)) {
+      hb_enabled_ = false;
       RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
       return;
   }
+
+  delta_x_ = delta_x_manual;
+  delta_y_ = delta_y_manual;
 
   auto joint_msg = dynamixel_interfaces::msg::JointVal();
   joint_msg.a1_des = a1_radians;
@@ -243,7 +256,7 @@ bool ArmChangerWorker::collision_check(const Eigen::Vector3d& p1,const Eigen::Ve
 
 bool ArmChangerWorker::path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const{
   
-  constexpr double v_max = 800.0;         // [mm/s]
+  constexpr double v_max = 10000.0;         // [mm/s]
 
   if (!prev_pos.allFinite() || !curr_pos.allFinite()) return false;
 
@@ -254,7 +267,7 @@ bool ArmChangerWorker::path_check(const Eigen::Vector3d& prev_pos, const Eigen::
   return true;
 }
 
-bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const{
+bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des, int arm_num) const{
   
   if (q.size() != 5) return false; //vec 검사
   
@@ -277,9 +290,13 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   const double pos_err = (pos_fk - pos_des).norm();
   const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
   const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
-  // RCLCPP_WARN(this->get_logger(), "pos_err %f, ang_err %f", pos_err, ang_err);
+  bool pos_ok = pos_err <= 10.0; //10mm
+  bool ang_ok = ang_err <= 0.01745*2; // 2deg
 
-  return (pos_err <= 3.0 && (ang_err <= 0.01745*2));  //3mm & 2 deg 
+  if(!pos_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, pos=%fmm )", arm_num, pos_err);
+  if(!ang_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, ang=%fdeg)", arm_num, ang_err*180/M_PI);
+
+  return (pos_ok && ang_ok); 
   return true;
 }
 

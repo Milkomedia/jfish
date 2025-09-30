@@ -32,9 +32,10 @@ private:
 
   //check funtion
   bool workspace_check(const Eigen::Vector3d& pos, int arm_num) const;
-  bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des) const;
+  bool ik_check(const std::array<double,5>& q, const Eigen::Vector3d& pos_des, const Eigen::Vector3d& heading_des, int arm_num) const;
   bool path_check(const Eigen::Vector3d& prev_pos, const Eigen::Vector3d& curr_pos, const double dt) const;
   bool collision_check(const Eigen::Vector3d& p1,const Eigen::Vector3d& p2,const Eigen::Vector3d& p3,const Eigen::Vector3d& p4) const;
+  bool checksum_on = false;
 
   // Publishers
   rclcpp::Publisher<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_publisher_;
@@ -55,6 +56,8 @@ private:
   const double lambda_ = 0.05;
   double delta_x_ = 0;
   double delta_y_ = 0;
+  double delta_x_manual = 0;
+  double delta_y_manual = 0;
 
   // DH params
   const double DH_a1_ = 134.;
@@ -62,7 +65,6 @@ private:
   const double DH_a3_ = 110.;
   const double DH_a4_ = 24.;
   const double DH_a5_ = 68.;
-
 
   // workspace constrain
   double x_min_ = -60.0; 
@@ -94,6 +96,7 @@ private:
 
   // Watchdog state
   bool kill_activated_ = true;
+  
 };
 
 
