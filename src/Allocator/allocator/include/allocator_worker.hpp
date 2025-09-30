@@ -69,7 +69,7 @@ private:
   
   // yaw-wrench conversion params
   // const double lpf_alpha_ = 0.093158;
-  const double lpf_alpha_ = 0.01;  // simulator gain
+  const double lpf_alpha_ = 0.000;  // simulator gain
   const double lpf_beta_  = 1.0 - lpf_alpha_;
   const double tauz_min   = -5.0; // saturation ref [Nm]
   const double tauz_max   =  5.0; // saturation ref [Nm]

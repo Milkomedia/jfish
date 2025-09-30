@@ -104,9 +104,9 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
 
   //IK check
   if (!ik_check(a1_radians, arm_position1, heading1, 1) || !ik_check(a2_radians, arm_position2, heading2, 2) || !ik_check(a3_radians, arm_position3, heading3, 3) || !ik_check(a4_radians, arm_position4, heading4, 4)) {
-      hb_enabled_ = false;
-      RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
-      return;
+      // hb_enabled_ = false;
+      // RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
+      // return;
   }
 
   delta_x_ = delta_x_manual;
@@ -176,7 +176,6 @@ bool ArmChangerWorker::workspace_check(const Eigen::Vector3d& pos, int arm_num) 
   return radial_ok && angle_ok;
 }
 
-
 std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, const Eigen::Vector3d &heading_input){
   Eigen::Vector3d heading = heading_input.normalized();  // Normalize
   const double a1_ = 134.;
@@ -199,7 +198,7 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, c
   double th5 = -std::acos(std::clamp(std::abs(cross_z) / denom_xy, -1.0, 1.0));
 
   if (th5 <= M_PI / 2.0) th5 += M_PI / 2.0;
-  if (p04.x() * p05.y() - p04.y() * p05.x() < 0.0) th5 = -th5;
+  if (p04.x() * p05.y() - p04.y() * p05.x() > 0.0) th5 = -th5;
 
   Eigen::Vector3d heading_projected = heading - std::sin(th5) * Eigen::Vector3d(std::sin(th1), -std::cos(th1), 0.0);
   if (heading_projected.norm() > EPS) heading_projected /= heading_projected.norm();
@@ -284,18 +283,18 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
 
   if (!pos_fk.allFinite() || !heading_fk.allFinite()) return false; //inf나 NaN 검사
 
-  heading_fk.normalize();
   Eigen::Vector3d h_des = heading_des.normalized();
+  Eigen::Vector3d h_cur = heading_fk.normalized();
 
   const double pos_err = (pos_fk - pos_des).norm();
-  const double heading_product = std::clamp(heading_fk.dot(h_des), -1.0, 1.0);
-  const double ang_err = std::atan2(heading_fk.cross(h_des).norm(), heading_product);
+  const double heading_product = std::clamp(h_cur.dot(h_des), -1.0, 1.0);
+  const double ang_err = std::atan2(h_cur.cross(h_des).norm(), heading_product);
   bool pos_ok = pos_err <= 10.0; //10mm
   bool ang_ok = ang_err <= 0.01745*2; // 2deg
 
   if(!pos_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, pos=%fmm )", arm_num, pos_err);
-  if(!ang_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, ang=%fdeg)", arm_num, ang_err*180/M_PI);
-
+  //if(!ang_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, ang=%fdeg)", arm_num, ang_err*180/M_PI);
+  RCLCPP_WARN(this->get_logger(), "des %f %f %f | cur %f %f %f", h_des.x(), h_des.y(), h_des.z(), h_cur.x(), h_cur.y(), h_cur.z());
   return (pos_ok && ang_ok); 
   return true;
 }
