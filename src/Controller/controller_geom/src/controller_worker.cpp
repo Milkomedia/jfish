@@ -188,8 +188,8 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   if (ref_[3] < 0) {ref_[3] += two_PI;}
   ref_[3] -= M_PI;
   
-  // command_->xd << ref_[0], ref_[1], ref_[2];
-  command_->xd << (ref_[0] + dHx), (ref_[1] + dHy), ref_[2]; // arm_changer 움직이는 반대 방향으로 cmd에 +
+  command_->xd << ref_[0], ref_[1], ref_[2];
+  // command_->xd << (ref_[0] + dHx), (ref_[1] + dHy), ref_[2]; // arm_changer 움직이는 반대 방향으로 cmd에 +
   command_->xd_dot.setZero();
   command_->xd_2dot.setZero();
   command_->xd_3dot.setZero();

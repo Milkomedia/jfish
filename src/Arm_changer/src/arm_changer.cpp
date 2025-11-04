@@ -37,10 +37,10 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   }
   
   //heading angle [rad]
-  Eigen::Vector3d heading1(0.0, std::sin(C2_(0)), std::sqrt(1-std::sin(C2_(0))*std::sin(C2_(0)))); // arm1
-  Eigen::Vector3d heading2(0.0, std::sin(C2_(1)), std::sqrt(1-std::sin(C2_(1))*std::sin(C2_(1)))); // arm2
-  Eigen::Vector3d heading3(0.0, std::sin(C2_(2)), std::sqrt(1-std::sin(C2_(2))*std::sin(C2_(2)))); // arm3
-  Eigen::Vector3d heading4(0.0, std::sin(C2_(3)), std::sqrt(1-std::sin(C2_(3))*std::sin(C2_(3)))); // arm4
+  Eigen::Vector3d heading1(0.0, -std::sin(C2_(0)), std::sqrt(1-std::sin(C2_(0))*std::sin(C2_(0)))); // arm1
+  Eigen::Vector3d heading2(0.0, -std::sin(C2_(1)), std::sqrt(1-std::sin(C2_(1))*std::sin(C2_(1)))); // arm2
+  Eigen::Vector3d heading3(0.0, -std::sin(C2_(2)), std::sqrt(1-std::sin(C2_(2))*std::sin(C2_(2)))); // arm3
+  Eigen::Vector3d heading4(0.0, -std::sin(C2_(3)), std::sqrt(1-std::sin(C2_(3))*std::sin(C2_(3)))); // arm4
 
   // //arm postion [mm]
   Eigen::Vector3d arm_position1(250.0 + half_sqrt2*(-delta_x_manual-delta_y_manual),   half_sqrt2*(+delta_x_manual-delta_y_manual),  220.0); //arm1
@@ -106,7 +106,7 @@ void ArmChangerWorker::sbus_callback(const sbus_interfaces::msg::SbusSignal::Sha
   if (!ik_check(a1_radians, arm_position1, heading1, 1) || !ik_check(a2_radians, arm_position2, heading2, 2) || !ik_check(a3_radians, arm_position3, heading3, 3) || !ik_check(a4_radians, arm_position4, heading4, 4)) {
       // hb_enabled_ = false;
       // RCLCPP_WARN(this->get_logger(), "IK check failed, heartbeat disabled!");
-      // return;
+      return;
   }
 
   delta_x_ = delta_x_manual;
@@ -193,12 +193,18 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, c
   double th1 = std::atan2(p04(1), p04(0));
 
   // θ5
-  const double cross_z = p04.x() * heading.y() - p04.y() * heading.x();
-  const double denom_xy = std::hypot(p04.x(), p04.y()) + EPS;
-  double th5 = -std::acos(std::clamp(std::abs(cross_z) / denom_xy, -1.0, 1.0));
+  Eigen::Vector3d n(p04.y(), -p04.x(), 0);
+  double nx5 = std::clamp(n.normalized().dot(heading.normalized()), -1.0, 1.0);
+  double th5 = M_PI/2 - std::acos(nx5);
+  if (p04.x() * p05.y() - p04.y() * p05.x() > 0.0) th5 = th5;
 
-  if (th5 <= M_PI / 2.0) th5 += M_PI / 2.0;
-  if (p04.x() * p05.y() - p04.y() * p05.x() > 0.0) th5 = -th5;
+  // θ5
+  // const double cross_z = p04.x() * heading.y() - p04.y() * heading.x();
+  // const double denom_xy = std::hypot(p04.x(), p04.y()) + EPS;
+  // double th5 = -std::acos(std::clamp(std::abs(cross_z) / denom_xy, -1.0, 1.0));
+
+  // if (th5 <= M_PI / 2.0) th5 += M_PI / 2.0;
+  // if (p04.x() * p05.y() - p04.y() * p05.x() > 0.0) th5 = -th5;
 
   Eigen::Vector3d heading_projected = heading - std::sin(th5) * Eigen::Vector3d(std::sin(th1), -std::cos(th1), 0.0);
   if (heading_projected.norm() > EPS) heading_projected /= heading_projected.norm();
@@ -234,7 +240,7 @@ std::array<double, 5> ArmChangerWorker::compute_ik(const Eigen::Vector3d &p05, c
   double s4 = z3.dot(x3.cross(x4_des));
   const double th4 = std::atan2(s4, c4);
   
-  //RCLCPP_WARN(this->get_logger(), "%f %f %f %f %f", th1, th2, th3, th4, th5);
+  // RCLCPP_WARN(this->get_logger(), "%f", th5);
   return {th1, th2, th3, th4, th5};
 }
 
@@ -293,10 +299,9 @@ bool ArmChangerWorker::ik_check(const std::array<double,5>& q, const Eigen::Vect
   bool ang_ok = ang_err <= 0.01745*2; // 2deg
 
   if(!pos_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, pos=%fmm )", arm_num, pos_err);
-  //if(!ang_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, ang=%fdeg)", arm_num, ang_err*180/M_PI);
-  RCLCPP_WARN(this->get_logger(), "des %f %f %f | cur %f %f %f", h_des.x(), h_des.y(), h_des.z(), h_cur.x(), h_cur.y(), h_cur.z());
+  if(!ang_ok) RCLCPP_WARN(this->get_logger(), "IK Fail (Arm%d, ang=%fdeg)", arm_num, ang_err*180/M_PI);
+  // RCLCPP_WARN(this->get_logger(), "des %f %f %f", h_des.x(), h_des.y(), h_des.z());
   return (pos_ok && ang_ok); 
-  return true;
 }
 
 void ArmChangerWorker::joint_callback() {

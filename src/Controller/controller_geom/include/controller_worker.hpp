@@ -40,7 +40,7 @@ constexpr double Y_offset = 0.6; // [m]
 constexpr double Z_offset = 0.0; // [m] it must be (+) sign.
 
 static const double DT = 0.0025;    // [s] 400 Hz
-static const double fc = 0.3;       // [Hz] Butterworth cutoff
+static const double fc = 1.0;       // [Hz] Butterworth cutoff initial Hz = 0.3
 const double wc = 2.0 * M_PI * fc;  // ωc
 const double w2 = wc * wc;
 const double w3 = w2 * wc;  
@@ -59,7 +59,7 @@ constexpr double PWM_alpha_ = 70.;
 constexpr double PWM_beta_ = 8.;
 const double LPF_alpha_ = 0.001;           // Low-pass filter coefficient
 const double LPF_beta_ = 1.0 - LPF_alpha_; // Low-pass filter coefficient
-double init_pwm_ = 0.2;                    // init goal PWM
+double init_pwm_ = 0.14;                    // init goal PWM
 double pwm_state_  = 0.0;
 
 inline double pwm2thrust(double pwm) {
@@ -147,7 +147,7 @@ private:
   // CoM estimate state
   Eigen::Vector2d Pc_hat_ = Eigen::Vector2d::Zero();
   double m_bar_ = 8.0;
-  double gamma_ = 0.0001;
+  double gamma_ = 0.00004;
   double g_ =9.80665;
 
   double F_out_pub_ = 0.;
