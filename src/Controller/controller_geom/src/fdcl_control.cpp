@@ -34,16 +34,22 @@ void fdcl::control::position_control(void){
   double eX_norm = eX.norm();
   if(eX_norm > eX_norm_max_) {eX = eX * (eX_norm_max_ / eX_norm);}
 
-  // position integral terms
+  // position integral terms (ryung)
   eIX.integrate(c1 * eX + eV, dt); // eq (13)
   double sat_sigma = 20.0/kIX;
-  saturate(eIX.error, -sat_sigma, sat_sigma);
-  eIX.error(0)=0.0;
-  eIX.error(1)=0.0;
+  
+  double sat_sigma_horizontal = 20.0/kIX; //<--gain tuning ------------------------------
+  double kIX_xy = kIX*5; //<--gain tuning -----------------------------------------------
 
+  eIX.error.x() = std::clamp(eIX.error.x(), -sat_sigma_horizontal, sat_sigma_horizontal);
+  eIX.error.y() = std::clamp(eIX.error.y(), -sat_sigma_horizontal, sat_sigma_horizontal);
+  eIX.error.z() = std::clamp(eIX.error.z(), -sat_sigma,            sat_sigma);
+
+  Eigen::Matrix3d KIX_dig = (Eigen::Vector3d(kIX_xy, kIX_xy, kIX)).asDiagonal();
+  
   // force 'f' along negative b3-axis - eq (14)
   // this term equals to R.e3
-  Vector3 A = -kX*eX - kV*eV - kIX*eIX.error - m*g*e3 + m*command->xd_2dot;
+  Vector3 A = -kX*eX - kV*eV - KIX_dig*eIX.error - m*g*e3 + m*command->xd_2dot;
 
   Vector3 b3 = state->R * e3;
   Vector3 b3_dot = state->R * hat(state->W) * e3; // eq (22)

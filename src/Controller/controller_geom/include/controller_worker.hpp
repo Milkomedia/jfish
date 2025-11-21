@@ -40,7 +40,7 @@ constexpr double Y_offset = 0.6; // [m]
 constexpr double Z_offset = 0.0; // [m] it must be (+) sign.
 
 static const double DT = 0.0025;    // [s] 400 Hz
-static const double fc = 1.0;       // [Hz] Butterworth cutoff initial Hz = 0.3
+static const double fc = 0.01;       // [Hz] Butterworth cutoff initial Hz = 0.3
 const double wc = 2.0 * M_PI * fc;  // ωc
 const double w2 = wc * wc;
 const double w3 = w2 * wc;  

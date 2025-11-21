@@ -30,6 +30,12 @@ Vector3 vee(const Matrix3 V){
   return  v;
 }
 
+//made by ryung -> horizental version saturate
+// inline void saturate(double &x, const double x_min, const double x_max){
+//   if (x > x_max) x = x_max;
+//   else if (x < x_min) x = x_min;
+// }
+
 void saturate(Vector3 &x, const double x_min, const double x_max){
   for (int i = 0; i < 3; i++){
     if (x(i) > x_max){x(i) = x_max;}
