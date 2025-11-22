@@ -300,9 +300,9 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
 
 void ControllerNode::refCallback(const controller_interfaces::msg::ControllerReference::SharedPtr msg) {
   // For example (MPC not yet..)
-  mpc_ref_[0] = msg->g_p_b[0];
-  mpc_ref_[1] = msg->g_p_b[1];
-  mpc_ref_[2] = msg->g_p_b[2];
+  mpc_ref_[0] = msg->positin[0];
+  mpc_ref_[1] = msg->positin[1];
+  mpc_ref_[2] = msg->positin[2];
   mpc_ref_[3] = msg->heading[0];
   mpc_ref_[4] = msg->heading[1];
   mpc_ref_[5] = msg->heading[2];

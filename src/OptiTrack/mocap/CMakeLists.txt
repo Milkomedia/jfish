@@ -1,5 +1,7 @@
-#GPT의 도움으로 Pre_build없이 작동하는 cmake입니다... 수정 필수 (원상태로) 
+# GPT의 도움으로 Pre_build없이 작동하는 cmake입니다... 수정 필수 (원상태로) 
 # 8a278b2da263f31c4f6eae8a34d0675f03a1b680 commit point
+# (단, 아래에 추가적인 joint cmd를 받는 부분은 추가해야함. 체크 해놓았다!!)
+
 cmake_minimum_required(VERSION 3.10)
 project(mocap)
 
@@ -26,6 +28,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(mocap_interfaces REQUIRED)
 find_package(mujoco_interfaces REQUIRED)
 find_package(watchdog_interfaces REQUIRED)
+find_package(dynamixel_interfaces REQUIRED) # <========================= 여기 추가
+find_package(imu_interfaces REQUIRED) # <========================= 여기 추가
 
 # Eigen / PCL
 find_package(eigen3_cmake_module REQUIRED)
@@ -68,6 +72,8 @@ ament_target_dependencies(mocap_worker
   mocap_interfaces
   mujoco_interfaces
   watchdog_interfaces
+  dynamixel_interfaces # <========================= 여기 추가
+  imu_interfaces # <========================= 여기 추가
 )
 
 target_link_libraries(mocap_worker

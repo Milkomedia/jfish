@@ -6,12 +6,16 @@
 #include "mujoco_interfaces/msg/mu_jo_co_meas.hpp"
 #include "watchdog_interfaces/msg/node_state.hpp"
 #include "mocap_interfaces/msg/named_pose_array.hpp"
+#include "dynamixel_interfaces/msg/joint_val.hpp"
+#include "imu_interfaces/msg/imu_measured.hpp"
 #include <chrono>
 #include <deque>
 #include <functional>
 #include <random>
 #include <cmath>
 #include <thread>
+#include <Eigen/Dense>
+#include <vector>
 
 constexpr double noise_pos_std_dev = 0.001;
 constexpr double noise_vel_std_dev = 0.005;
@@ -46,6 +50,8 @@ private:
   void heartbeat_timer_callback();
   void optitrack_callback(const mocap_interfaces::msg::NamedPoseArray::SharedPtr msg);
   void mujoco_callback(const mujoco_interfaces::msg::MuJoCoMeas::SharedPtr msg);
+  void jointValCallback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg);
+  void imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg);
 
   bool opti_hz_check();
 
@@ -53,6 +59,9 @@ private:
   rclcpp::Subscription<mocap_interfaces::msg::NamedPoseArray>::SharedPtr optitrack_mea_subscription_;
   // MuJoCo Subscriber
   rclcpp::Subscription<mujoco_interfaces::msg::MuJoCoMeas>::SharedPtr mujoco_subscription_;
+  // both Subscriber
+  rclcpp::Subscription<dynamixel_interfaces::msg::JointVal>::SharedPtr joint_subscriber_;
+  rclcpp::Subscription<imu_interfaces::msg::ImuMeasured>::SharedPtr imu_mea_subscription_;
 
   rclcpp::Publisher<mocap_interfaces::msg::MocapMeasured>::SharedPtr mocap_publisher_;
   rclcpp::TimerBase::SharedPtr publish_timer_;
@@ -95,6 +104,34 @@ private:
   // Buffer to store recent OptiTrack callback timestamps for freq estimation
   std::deque<rclcpp::Time> opti_stamp_buffer_;
   const rclcpp::Duration check_horizon_{0, 500000000}; // (0.5s)
+
+  // coordinate change data {b}2{CoT} 
+  Eigen::Matrix<double,6,4> DH_params_; // 6x4 DH table (rows: link 0..5; cols: a, alpha, d, theta0)
+  Eigen::Vector4d q_B0_;                // Body to Arm rotation angle in z axis [rad]
+  Eigen::Matrix<double, 3, 4> B_p_arm;   // position vector group of each arm baed on FK [m]
+  Eigen::Matrix<double, 3, 4> B_h_arm;   // x direction heading vector group of each arm on {B} [unit]
+  Eigen::Vector3d B_p_cot;
+  Eigen::Vector3d B_p_cot_prev;
+  Eigen::Vector3d B_v_cot;
+  Eigen::Vector3d omega;
+  Eigen::Matrix3d B_R_cot;
+  Eigen::Matrix3d G_R_B;
+
+  double arm_des_[4][5] = {
+    {0.785398,  0.0, -1.50944, 0.0, 0.0},   // a1_des
+    {2.35619,   0.0, -1.50944, 0.0, 0.0},   // a2_des
+    {-2.35619,  0.0, -1.50944, 0.0, 0.0},   // a3_des
+    {-0.785398, 0.0, -1.50944, 0.0, 0.0}};  // a4_des
+
+  static inline Eigen::Matrix4d compute_DH(double a, double alpha, double d, double theta) {
+    Eigen::Matrix4d T;
+    T << std::cos(theta), -std::sin(theta) * std::cos(alpha),  std::sin(theta) * std::sin(alpha), a * std::cos(theta),
+         std::sin(theta),  std::cos(theta) * std::cos(alpha), -std::cos(theta) * std::sin(alpha), a * std::sin(theta),
+         0,                std::sin(alpha),                    std::cos(alpha),                   d,
+         0,                0,                                   0,                                1;
+    return T;
+  }
+
 };
 
 #endif // MOCAP_WORKER_HPP

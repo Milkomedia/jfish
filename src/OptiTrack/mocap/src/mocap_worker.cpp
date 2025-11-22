@@ -7,8 +7,19 @@ OptiTrackNode::OptiTrackNode()
   gen_(std::random_device{}()),
   pos_dist_(0.0, noise_pos_std_dev),
   vel_dist_(0.0, noise_vel_std_dev),
-  acc_dist_(0.0, noise_acc_std_dev)
-{
+  acc_dist_(0.0, noise_acc_std_dev),
+  q_B0_(Eigen::Vector4d(0.25*M_PI, 0.75*M_PI, -0.75*M_PI, -0.25*M_PI)) {
+
+  // -------- DH table --------
+  DH_params_ <<
+    //   a      alpha     d   theta0
+       0.120,   0.0,     0.0,  0.0,   // B->0
+       0.134,   M_PI/2,  0.0,  0.0,   // 0->1
+       0.115,   0.0,     0.0,  0.0,   // 1->2
+       0.110,   0.0,     0.0,  0.0,   // 2->3
+       0.024,   M_PI/2,  0.0,  0.0,   // 3->4
+       0.068,   0.0,     0.0,  0.0;   // 4->5
+
   // 1) publishers
   mocap_publisher_ = this->create_publisher<mocap_interfaces::msg::MocapMeasured>("optitrack_mea", 1);
   heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("optitrack_state", 1);
@@ -20,6 +31,10 @@ OptiTrackNode::OptiTrackNode()
   this->declare_parameter<std::string>("mode", "None");
   std::string mode;
   this->get_parameter("mode", mode);
+
+  // To get the q for b_attitude_cot b_postion_cot
+  joint_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("/joint_mea", 1, std::bind(&OptiTrackNode::jointValCallback, this, std::placeholders::_1));
+  imu_mea_subscription_ = this->create_subscription<imu_interfaces::msg::ImuMeasured>("/imu_mea", 1, std::bind(&OptiTrackNode::imuCallback, this, std::placeholders::_1));
 
   if (mode == "real"){
     // Mode = real -> Reading OptiTrack
@@ -89,10 +104,25 @@ void OptiTrackNode::optitrack_callback(const mocap_interfaces::msg::NamedPoseArr
 }
 
 void OptiTrackNode::PublishOptiTrackMeasurement() { // Timer callbacked as 500Hz
+
+  //change the coordinate to {CoT} from {B}
+  
+  // Postion
+  Eigen::Vector3d G_p_cot = G_R_B * B_p_cot; // bias (i.e. {B_p_cot}_G = G에서 본 B좌표계에서 VoT까지의 위치벡터값)
+  for (size_t i = 0; i < 3; ++i) G_p_cot[i] += real_optitrack_data_.pos[i]; 
+
+  // Velocity
+  Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + omega.cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값
+  for (size_t i = 0; i < 3; ++i) G_v_cot[i] += real_optitrack_data_.vel[i]; 
+
+  // Accelation
+  Eigen::Vector3d G_a_cot; // pass
+  for (size_t i = 0; i < 3; ++i) G_a_cot[i] += real_optitrack_data_.acc[i]; 
+
   auto output_msg = mocap_interfaces::msg::MocapMeasured();
-  output_msg.pos = { real_optitrack_data_.pos[0], real_optitrack_data_.pos[1], real_optitrack_data_.pos[2] };
-  output_msg.vel = { real_optitrack_data_.vel[0], real_optitrack_data_.vel[1], real_optitrack_data_.vel[2] };
-  output_msg.acc = { real_optitrack_data_.acc[0], real_optitrack_data_.acc[1], real_optitrack_data_.acc[2] };
+  output_msg.pos = { G_p_cot[0], G_p_cot[1], G_p_cot[2] };
+  output_msg.vel = { G_v_cot[0], G_v_cot[1], G_v_cot[2] };
+  output_msg.acc = { G_a_cot[0], G_a_cot[1], G_a_cot[2] };
   mocap_publisher_->publish(output_msg);
 
   // opti disconnect monitoring
@@ -175,11 +205,25 @@ void OptiTrackNode::PublishMuJoCoMeasurement() {
     noisy_acc[i] = delayed_data.acc[i] + acc_dist_(gen_);
   }
 
+  //change the coordinate to {CoT} from {B}
+  
+  // Postion
+  Eigen::Vector3d G_p_cot = G_R_B * B_p_cot; // bias (i.e. {B_p_cot}_G = G에서 본 B좌표계에서 VoT까지의 위치벡터값)
+  for (size_t i = 0; i < 3; ++i) G_p_cot[i] += noisy_pos[i]; 
+
+  // Velocity
+  Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + omega.cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값
+  for (size_t i = 0; i < 3; ++i) G_v_cot[i] += noisy_vel[i]; 
+
+  // Accelation
+  Eigen::Vector3d G_a_cot; // pass
+  for (size_t i = 0; i < 3; ++i) G_a_cot[i] += real_optitrack_data_.acc[i]; 
+
   // Publish data
   auto output_msg = mocap_interfaces::msg::MocapMeasured();
-  output_msg.pos = { noisy_pos[0], noisy_pos[1], noisy_pos[2] };
-  output_msg.vel = { noisy_vel[0], noisy_vel[1], noisy_vel[2] };
-  output_msg.acc = { noisy_acc[0], noisy_acc[1], noisy_acc[2] };
+  output_msg.pos = { G_p_cot[0], G_p_cot[1], G_p_cot[2] };
+  output_msg.vel = { G_v_cot[0], G_v_cot[1], G_v_cot[2] };
+  output_msg.acc = { G_a_cot[0], G_a_cot[1], G_a_cot[2] };
 
   mocap_publisher_->publish(output_msg);
 }
@@ -195,6 +239,82 @@ void OptiTrackNode::heartbeat_timer_callback() {
 
   // uint8 overflow wraps automatically
   hb_state_ = static_cast<uint8_t>(hb_state_ + 1);
+}
+
+/* for Coordinate Define */
+void OptiTrackNode::jointValCallback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg)  {
+
+  for (uint8_t i = 0; i < 5; ++i) {
+    arm_des_[0][i] = msg->a1_des[i];   // Arm 1
+    arm_des_[1][i] = msg->a2_des[i];   // Arm 2
+    arm_des_[2][i] = msg->a3_des[i];   // Arm 3
+    arm_des_[3][i] = msg->a4_des[i];   // Arm 4
+  }
+
+  for (uint8_t arm = 0; arm < 4; ++arm) {
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+
+    for (uint8_t i = 0; i <= 5; ++i) {
+      const double q = (i == 0) ? q_B0_(arm) : arm_des_[arm][i-1];
+      T *= compute_DH(DH_params_(i,0), DH_params_(i,1), DH_params_(i,2), DH_params_(i,3) + q);
+    }
+    // save position vector
+    B_p_arm.col(arm) = T.block<3,1>(0,3);
+    B_h_arm.col(arm) = T.block<3,3>(0,0).col(0);
+  }
+
+  // get the CoT coordinate => B_p_cot / B_R_cot
+  B_p_cot = B_p_arm.rowwise().mean();
+
+  std::string mode;
+  this->get_parameter("mode");
+  last_dt_ = mode == "real" ? last_dt_ : 1/400.0; //400Hz
+
+  if (last_dt_ > 0.0) B_v_cot = (B_p_cot - B_p_cot_prev) / last_dt_;
+  B_p_cot_prev = B_p_cot;
+
+  Eigen::Vector3d z_unit = B_h_arm.rowwise().sum().normalized();
+  Eigen::Vector3d x_unit = ((B_p_arm.col(0) + B_p_arm.col(3)) - (B_p_arm.col(1) + B_p_arm.col(2))).normalized();
+  Eigen::Vector3d y_unit = ((B_p_arm.col(0) + B_p_arm.col(1)) - (B_p_arm.col(2) + B_p_arm.col(3))).normalized();
+
+  const double ortho_eps = 1e-3; //if not othogonal => believe the X-axis than Y-axis (not perpect yet)
+  if ( std::abs(x_unit.dot(y_unit)) > ortho_eps || std::abs(y_unit.dot(z_unit)) > ortho_eps || std::abs(x_unit.dot(z_unit)) > ortho_eps ) y_unit = z_unit.cross(x_unit).normalized();
+
+  B_R_cot.col(0) = x_unit; B_R_cot.col(1) = y_unit; B_R_cot.col(2) = z_unit;
+
+}
+
+/* for Coordinate Define */
+void OptiTrackNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg) {
+
+  const double w = msg->q[0];
+  const double x = msg->q[1];
+  const double y = msg->q[2];
+  const double z = msg->q[3];
+  
+  const double xx = x * x;
+  const double yy = y * y;
+  const double zz = z * z;
+  const double xy = x * y;
+  const double xz = x * z;
+  const double yz = y * z;
+  const double wx = w * x;
+  const double wy = w * y;
+  const double wz = w * z;
+
+  G_R_B(0,0) = 1.0 - 2.0 * (yy + zz);
+  G_R_B(0,1) = 2.0 * (xy - wz);
+  G_R_B(0,2) = 2.0 * (xz + wy);
+
+  G_R_B(1,0) = 2.0 * (xy + wz);
+  G_R_B(1,1) = 1.0 - 2.0 * (xx + zz);
+  G_R_B(1,2) = 2.0 * (yz - wx);
+
+  G_R_B(2,0) = 2.0 * (xz - wy);
+  G_R_B(2,1) = 2.0 * (yz + wx);
+  G_R_B(2,2) = 1.0 - 2.0 * (xx + yy);
+
+  omega << msg->w[0], msg->w[1], msg->w[2];
 }
 
 int main(int argc, char **argv) {
