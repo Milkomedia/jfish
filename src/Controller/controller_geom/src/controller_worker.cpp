@@ -14,6 +14,7 @@ ControllerNode::ControllerNode()
   sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("/sbus_signal", 1, std::bind(&ControllerNode::sbusCallback, this, std::placeholders::_1));
   optitrack_mea_subscription_ = this->create_subscription<mocap_interfaces::msg::MocapMeasured>("/optitrack_mea", 1, std::bind(&ControllerNode::optitrackCallback, this, std::placeholders::_1));
   imu_mea_subscription_ = this->create_subscription<imu_interfaces::msg::ImuMeasured>("/imu_mea", 1, std::bind(&ControllerNode::imuCallback, this, std::placeholders::_1));
+  reference_subscription_ = this->create_subscription<controller_interfaces::msg::ControllerReference>("/ref_MPC", 1, std::bind(&ControllerNode::refCallback, this, std::placeholders::_1));
   // mujoco_subscription_ = this->create_subscription<mujoco_interfaces::msg::MujocoState>("/mujoco_state", 1, std::bind(&ControllerNode::mujocoCallback, this, std::placeholders::_1));
  
   // Publishers
@@ -46,6 +47,25 @@ void ControllerNode::controller_timer_callback() {
   double f_out_geom;
   Eigen::Vector3d M_out_geom;
   
+  // Input the ref ref[0~2] = {G}pb_des / ref[3] = {G}heading_des
+  
+  if(true) // SBUS
+  {
+    command_->xd << sbus_ref_[0], sbus_ref_[1], sbus_ref_[2];
+    command_->b1d << std::cos(sbus_ref_[3]), std::sin(sbus_ref_[3]), 0.0;
+  }
+  else{ // MPC baed path
+    //switching 하는 과정에서의 안정성을 보장하도록 LPF같은걸 해야하는 게 맞을듯  
+    mpc_ref_[0]++; //just check
+  } 
+
+  command_->xd_dot.setZero();
+  command_->xd_2dot.setZero();
+  command_->xd_3dot.setZero();
+  command_->xd_4dot.setZero();
+  command_->b1d_dot.setZero();
+  command_->b1d_ddot.setZero();
+
   fdcl_controller_.position_control();
   fdcl_controller_.output_fM(f_out_geom, M_out_geom);
 
@@ -108,7 +128,7 @@ void ControllerNode::controller_timer_callback() {
   else           {overriding_coeff_ += turnon_coeff_;}  // resume
   overriding_coeff_ = std::clamp(overriding_coeff_, 0.0, 1.0);
   M_out_pub_ = overriding_coeff_ * M_out_pub_;
-  
+
   const double pwm_target = (run_up_state_ == 2) ? init_pwm_ : 0.0;
   pwm_state_ = LPF_alpha_ * pwm_target + LPF_beta_ * pwm_state_;
   pwm_state_ = std::clamp(pwm_state_, 0.0, init_pwm_);
@@ -142,7 +162,6 @@ void ControllerNode::controller_timer_callback() {
   // GUI/디버그용 복사
   F_cmd_pub_.store(F_cmd, std::memory_order_relaxed);
 
-
   //----------- Publsih -----------
   controller_interfaces::msg::ControllerOutput msg;
   // msg.force = F_out_pub_;
@@ -168,38 +187,18 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   sbus_chnl_[9] = msg->ch[5];  // paddle
   
   // remap SBUS data to double <pos x,y,z in [m]>
-  ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
-  ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) * mapping_factor_xy;  // [m]
-  ref_[2] = static_cast<double>(352 - sbus_chnl_[3])  * mapping_factor_z; // [m]
-
-  double delta_x_manual = map(static_cast<double>(msg->ch[10]), 352, 1696, x_min_, x_max_); // [m]
-  double delta_y_manual = map(static_cast<double>(msg->ch[11]), 352, 1696, y_min_, y_max_); // [m]
-
-  const double yaw_w = yaw_[0];
-  const double dHx = std::cos(yaw_w) * delta_x_manual - std::sin(yaw_w) * delta_y_manual;
-  const double dHy = std::sin(yaw_w) * delta_x_manual + std::cos(yaw_w) * delta_y_manual;
+  sbus_ref_[0] = static_cast<double>(1024 - sbus_chnl_[0]) * mapping_factor_xy;  // [m]
+  sbus_ref_[1] = static_cast<double>(sbus_chnl_[1] - 1024) * mapping_factor_xy;  // [m]
+  sbus_ref_[2] = static_cast<double>(352 - sbus_chnl_[3])  * mapping_factor_z; // [m]
 
   // remap SBUS data to double <yaw-heading in [rad]>
   double delta_yaw = (sbus_chnl_[2] < 1018 || sbus_chnl_[2] > 1030) 
     ? static_cast<double>(sbus_chnl_[2] - 1024) * mapping_factor_yaw 
     : 0.0;
-  ref_[3] += delta_yaw;
-  ref_[3] = fmod(ref_[3] + M_PI, two_PI);
-  if (ref_[3] < 0) {ref_[3] += two_PI;}
-  ref_[3] -= M_PI;
-  
-  command_->xd << ref_[0], ref_[1], ref_[2];
-  // command_->xd << (ref_[0] + dHx), (ref_[1] + dHy), ref_[2]; // arm_changer 움직이는 반대 방향으로 cmd에 +
-  command_->xd_dot.setZero();
-  command_->xd_2dot.setZero();
-  command_->xd_3dot.setZero();
-  command_->xd_4dot.setZero();
-
-  command_->b1d << std::cos(ref_[3]), std::sin(ref_[3]), 0.0;
-  command_->b1d_dot.setZero();
-  command_->b1d_ddot.setZero();
-
-  // RCLCPP_WARN(this->get_logger(), "x %f, y %f", ref_[0] + dHx, ref_[1] + dHy);
+  sbus_ref_[3] += delta_yaw;
+  sbus_ref_[3] = fmod(sbus_ref_[3] + M_PI, two_PI);
+  if (sbus_ref_[3] < 0) {sbus_ref_[3] += two_PI;}
+  sbus_ref_[3] -= M_PI;
 
   if      (sbus_chnl_[6]==352){estimator_state_ = 0;}   // conventional
   else if (sbus_chnl_[6]==1024){estimator_state_ = 1;}  // dob
@@ -299,13 +298,19 @@ void ControllerNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedP
   yaw_[0]   = std::atan2(2.0*(wz + xy), 1.0 - 2.0*(yy + zz));
 }
 
-Eigen::Vector2d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector2d tau_tilde_star)
-{
-  // -------- 상태 (Block A: Q*s^2*J*q) --------
+void ControllerNode::refCallback(const controller_interfaces::msg::ControllerReference::SharedPtr msg) {
+  // For example (MPC not yet..)
+  mpc_ref_[0] = msg->g_p_b[0];
+  mpc_ref_[1] = msg->g_p_b[1];
+  mpc_ref_[2] = msg->g_p_b[2];
+  mpc_ref_[3] = msg->heading[0];
+  mpc_ref_[4] = msg->heading[1];
+  mpc_ref_[5] = msg->heading[2];
+}
+
+Eigen::Vector2d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector2d tau_tilde_star){
   static double x_r1=0.0, x_r2=0.0, x_r3=0.0; // roll
   static double x_p1=0.0, x_p2=0.0, x_p3=0.0; // pitch
-
-  // -------- 상태 (Block B: Q*tau_tilde) --------
   static double y_r1=0.0, y_r2=0.0, y_r3=0.0; // roll
   static double y_p1=0.0, y_p2=0.0, y_p3=0.0; // pitch
 
@@ -347,7 +352,6 @@ Eigen::Vector2d ControllerNode::DoB_update(Eigen::Vector3d rpy,Eigen::Vector2d t
 
   double dhat_p = tau_hat_p - Qtau_p;
 
-  // -------- 최종 외란 추정 --------
   Eigen::Vector2d d_hat(dhat_r, dhat_p);
   d_hat = (d_hat.cwiseMax(Eigen::Vector2d::Constant(-5.0))).cwiseMin(Eigen::Vector2d::Constant(5.0)); // saturation
   return d_hat;
@@ -378,10 +382,10 @@ void ControllerNode::debugging_timer_callback() {
 
   for (int i = 0; i < 9; i++) {gui_msg.sbus_chnl[i] = sbus_chnl_[i];}
 
-  gui_msg.pos_cmd[0] = ref_[0]; // x
-  gui_msg.pos_cmd[1] = -ref_[1]; // y
-  gui_msg.pos_cmd[2] = -ref_[2]; // z
-  gui_msg.pos_cmd[3] = -ref_[3]; // yaw
+  gui_msg.pos_cmd[0] = sbus_ref_[0]; // x
+  gui_msg.pos_cmd[1] = -sbus_ref_[1]; // y
+  gui_msg.pos_cmd[2] = -sbus_ref_[2]; // z
+  gui_msg.pos_cmd[3] = -sbus_ref_[3]; // yaw
 
   // gui_msg.wrench_des[0] = F_out_pub_;
   gui_msg.wrench_des[0] = F_cmd_pub_.load(std::memory_order_relaxed); 
@@ -424,6 +428,7 @@ void ControllerNode::pub_for_plot(){
   msg.rot_mea[8] = state_->R(2,2);
   publisher_for_plot_->publish(msg);
 }
+
 void ControllerNode::controller_loop() {
   constexpr auto period = std::chrono::microseconds(Loop_us);
   auto next_time = std::chrono::steady_clock::now() + period;

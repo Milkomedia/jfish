@@ -11,6 +11,7 @@
 #include "controller_interfaces/msg/controller_output.hpp"
 #include "controller_interfaces/msg/controller_debug_val.hpp"
 #include "controller_interfaces/msg/controller_info.hpp"
+#include "controller_interfaces/msg/controller_reference.hpp"
 #include "mocap_interfaces/msg/mocap_measured.hpp"
 #include "imu_interfaces/msg/imu_measured.hpp"
 #include "mujoco_interfaces/msg/mujoco_state.hpp"
@@ -71,11 +72,9 @@ inline double thrust2pwm(double thrust) {
   if (v <= 0.0) return 0.0;
   return std::sqrt(v);
 }
-
 inline double pwm2total_thrust(double pwm) {
   return 4.0 * pwm2thrust(pwm);
 }
-
 
 static inline double map(double input, double in_min, double in_max, double out_min, double out_max) {
   return (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
@@ -100,6 +99,7 @@ private:
   void optitrackCallback(const mocap_interfaces::msg::MocapMeasured::SharedPtr msg);
   void imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPtr msg);
   void mujocoCallback(const mujoco_interfaces::msg::MujocoState::SharedPtr msg);
+  void refCallback(const controller_interfaces::msg::ControllerReference::SharedPtr msg);
   void controller_timer_callback();
   void heartbeat_timer_callback();
   void debugging_timer_callback();
@@ -111,7 +111,7 @@ private:
   rclcpp::Subscription<mocap_interfaces::msg::MocapMeasured>::SharedPtr optitrack_mea_subscription_;
   rclcpp::Subscription<imu_interfaces::msg::ImuMeasured>::SharedPtr imu_mea_subscription_;
   rclcpp::Subscription<mujoco_interfaces::msg::MujocoState>::SharedPtr mujoco_subscription_;
-
+  rclcpp::Subscription<controller_interfaces::msg::ControllerReference>::SharedPtr reference_subscription_;
   rclcpp::Publisher<controller_interfaces::msg::ControllerOutput>::SharedPtr controller_publisher_;
   
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
@@ -155,13 +155,16 @@ private:
 
   // sbus state
   int   sbus_chnl_[10] = {1024, 1024, 352, 1024, 352, 352, 352, 352, 352, 352};
-  double ref_[4] = {0.0, 0.0, 0.0, 0.0}; // x,y,z,yaw cmd [m, m, m, rad]
+  double sbus_ref_[4] = {0.0, 0.0, 0.0, 0.0}; // x,y,z,yaw cmd [m, m, m, rad]
   double roll_[3] =  {0.0, 0.0, 0.0}; // imu r [rad, rad/s, rad/s^2]
   double pitch_[3] = {0.0, 0.0, 0.0}; // imu p [rad, rad/s, rad/s^2]
   double yaw_[3] =   {0.0, 0.0, 0.0}; // imu y [rad, rad/s, rad/s^2]
   double x_[3] = {0.0, 0.0, 0.0}; // opti x [m, m/s, m/s^2]
   double y_[3] = {0.0, 0.0, 0.0}; // opti y [m, m/s, m/s^2]
   double z_[3] = {0.0, 0.0, 0.0}; // opti z [m, m/s, m/s^2]
+
+  // MPC state
+  float mpc_ref_[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}; // x,y,z,heading [m, m, m, unit, unit, unit]
 
   // heartbeat state  
   uint8_t  hb_state_;     // current heartbeat value
