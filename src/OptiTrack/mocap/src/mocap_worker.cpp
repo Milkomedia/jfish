@@ -214,7 +214,6 @@ void OptiTrackNode::PublishMuJoCoMeasurement() {
   for (size_t i = 0; i < 3; ++i) G_p_cot[i] += noisy_pos[i]; 
 
   // Velocity
-  
   Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + (B_R_cot*omega_cot).cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값 
   for (size_t i = 0; i < 3; ++i) G_v_cot[i] += noisy_vel[i]; 
   RCLCPP_INFO(this->get_logger(), "%f %f", B_v_cot(1), G_v_cot(1));
@@ -225,7 +224,7 @@ void OptiTrackNode::PublishMuJoCoMeasurement() {
   // Publish data
   auto output_msg = mocap_interfaces::msg::MocapMeasured();
   output_msg.pos = { G_p_cot[0], G_p_cot[1], G_p_cot[2] };
-  output_msg.vel = { noisy_vel[0], noisy_vel[1], noisy_vel[2] };
+  output_msg.vel = { G_v_cot[0], noisy_vel[1], noisy_vel[2] };
   output_msg.acc = { G_a_cot[0], G_a_cot[1], G_a_cot[2] };
 
   mocap_publisher_->publish(output_msg);
@@ -273,7 +272,16 @@ void OptiTrackNode::jointValCallback(const dynamixel_interfaces::msg::JointVal::
   if (!this->get_parameter("mode", mode)) mode = "sim";
   last_dt_ = (mode == "real") ? last_dt_ : 1.0/400.0;
 
-  if (last_dt_ > 0.0) B_v_cot = (B_p_cot - B_p_cot_prev) / last_dt_;
+  if (!B_v_cot_init_) {
+    B_p_cot_prev = B_p_cot;
+    B_v_cot.setZero();
+    B_v_cot_init_ = true;
+  } 
+  else if (last_dt_ > 0.0) {
+    Eigen::Vector3d v_raw = (B_p_cot - B_p_cot_prev) / last_dt_;
+    B_v_cot = vel_lpf_alpha_ * v_raw + vel_lpf_beta_ * B_v_cot;
+  }
+
   B_p_cot_prev = B_p_cot;
 
   Eigen::Vector3d z_unit = B_h_arm.rowwise().sum().normalized();

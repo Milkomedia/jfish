@@ -116,6 +116,7 @@ private:
   Eigen::Vector3d omega_cot;
   Eigen::Matrix3d B_R_cot;
   Eigen::Matrix3d G_R_cot;
+  bool B_v_cot_init_ = false; 
 
   double arm_des_[4][5] = {
     {0.785398,  0.0, -1.50944, 0.0, 0.0},   // a1_des
