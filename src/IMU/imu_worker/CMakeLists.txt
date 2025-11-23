@@ -13,9 +13,17 @@ find_package(imu_interfaces REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(mujoco_interfaces REQUIRED)
 find_package(watchdog_interfaces REQUIRED)
+find_package(dynamixel_interfaces REQUIRED)
 
-# Include directories
-include_directories(include)
+# Eigen / PCL
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io kdtree search registration)
+
+include_directories(
+  include
+  ${EIGEN3_INCLUDE_DIRS}
+)
 
 # Add executables
 add_executable(imu_worker src/imu_worker.cpp)
@@ -28,6 +36,7 @@ ament_target_dependencies(imu_worker
   sensor_msgs
   mujoco_interfaces
   watchdog_interfaces
+  dynamixel_interfaces
 )
 
 install(TARGETS

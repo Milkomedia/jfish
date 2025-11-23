@@ -113,9 +113,9 @@ private:
   Eigen::Vector3d B_p_cot;
   Eigen::Vector3d B_p_cot_prev;
   Eigen::Vector3d B_v_cot;
-  Eigen::Vector3d omega;
+  Eigen::Vector3d omega_cot;
   Eigen::Matrix3d B_R_cot;
-  Eigen::Matrix3d G_R_B;
+  Eigen::Matrix3d G_R_cot;
 
   double arm_des_[4][5] = {
     {0.785398,  0.0, -1.50944, 0.0, 0.0},   // a1_des

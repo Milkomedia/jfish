@@ -108,11 +108,12 @@ void OptiTrackNode::PublishOptiTrackMeasurement() { // Timer callbacked as 500Hz
   //change the coordinate to {CoT} from {B}
   
   // Postion
+  Eigen::Matrix3d G_R_B = G_R_cot *  B_R_cot.transpose();
   Eigen::Vector3d G_p_cot = G_R_B * B_p_cot; // bias (i.e. {B_p_cot}_G = G에서 본 B좌표계에서 VoT까지의 위치벡터값)
   for (size_t i = 0; i < 3; ++i) G_p_cot[i] += real_optitrack_data_.pos[i]; 
 
   // Velocity
-  Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + omega.cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값
+  Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + omega_cot.cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값
   for (size_t i = 0; i < 3; ++i) G_v_cot[i] += real_optitrack_data_.vel[i]; 
 
   // Accelation
@@ -208,13 +209,15 @@ void OptiTrackNode::PublishMuJoCoMeasurement() {
   //change the coordinate to {CoT} from {B}
   
   // Postion
+  Eigen::Matrix3d G_R_B = G_R_cot *  B_R_cot.transpose();
   Eigen::Vector3d G_p_cot = G_R_B * B_p_cot; // bias (i.e. {B_p_cot}_G = G에서 본 B좌표계에서 VoT까지의 위치벡터값)
   for (size_t i = 0; i < 3; ++i) G_p_cot[i] += noisy_pos[i]; 
 
   // Velocity
-  Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + omega.cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값
+  
+  Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + (B_R_cot*omega_cot).cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값 
   for (size_t i = 0; i < 3; ++i) G_v_cot[i] += noisy_vel[i]; 
-
+  RCLCPP_INFO(this->get_logger(), "%f %f", B_v_cot(1), G_v_cot(1));
   // Accelation
   Eigen::Vector3d G_a_cot; // pass
   for (size_t i = 0; i < 3; ++i) G_a_cot[i] += real_optitrack_data_.acc[i]; 
@@ -222,7 +225,7 @@ void OptiTrackNode::PublishMuJoCoMeasurement() {
   // Publish data
   auto output_msg = mocap_interfaces::msg::MocapMeasured();
   output_msg.pos = { G_p_cot[0], G_p_cot[1], G_p_cot[2] };
-  output_msg.vel = { G_v_cot[0], G_v_cot[1], G_v_cot[2] };
+  output_msg.vel = { noisy_vel[0], noisy_vel[1], noisy_vel[2] };
   output_msg.acc = { G_a_cot[0], G_a_cot[1], G_a_cot[2] };
 
   mocap_publisher_->publish(output_msg);
@@ -267,8 +270,8 @@ void OptiTrackNode::jointValCallback(const dynamixel_interfaces::msg::JointVal::
   B_p_cot = B_p_arm.rowwise().mean();
 
   std::string mode;
-  this->get_parameter("mode");
-  last_dt_ = mode == "real" ? last_dt_ : 1/400.0; //400Hz
+  if (!this->get_parameter("mode", mode)) mode = "sim";
+  last_dt_ = (mode == "real") ? last_dt_ : 1.0/400.0;
 
   if (last_dt_ > 0.0) B_v_cot = (B_p_cot - B_p_cot_prev) / last_dt_;
   B_p_cot_prev = B_p_cot;
@@ -302,19 +305,19 @@ void OptiTrackNode::imuCallback(const imu_interfaces::msg::ImuMeasured::SharedPt
   const double wy = w * y;
   const double wz = w * z;
 
-  G_R_B(0,0) = 1.0 - 2.0 * (yy + zz);
-  G_R_B(0,1) = 2.0 * (xy - wz);
-  G_R_B(0,2) = 2.0 * (xz + wy);
+  G_R_cot(0,0) = 1.0 - 2.0 * (yy + zz);
+  G_R_cot(0,1) = 2.0 * (xy - wz);
+  G_R_cot(0,2) = 2.0 * (xz + wy);
 
-  G_R_B(1,0) = 2.0 * (xy + wz);
-  G_R_B(1,1) = 1.0 - 2.0 * (xx + zz);
-  G_R_B(1,2) = 2.0 * (yz - wx);
+  G_R_cot(1,0) = 2.0 * (xy + wz);
+  G_R_cot(1,1) = 1.0 - 2.0 * (xx + zz);
+  G_R_cot(1,2) = 2.0 * (yz - wx);
 
-  G_R_B(2,0) = 2.0 * (xz - wy);
-  G_R_B(2,1) = 2.0 * (yz + wx);
-  G_R_B(2,2) = 1.0 - 2.0 * (xx + yy);
+  G_R_cot(2,0) = 2.0 * (xz - wy);
+  G_R_cot(2,1) = 2.0 * (yz + wx);
+  G_R_cot(2,2) = 1.0 - 2.0 * (xx + yy);
 
-  omega << msg->w[0], msg->w[1], msg->w[2];
+  omega_cot << msg->w[0], msg->w[1], msg->w[2];
 }
 
 int main(int argc, char **argv) {

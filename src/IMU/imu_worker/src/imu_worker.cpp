@@ -16,14 +16,28 @@ IMUnode::IMUnode()
   gen_(std::random_device{}()),
   angle_dist_(0.0, noise_quat_std_dev),
   axis_dist_(0.0, 1.0),
-  noise_dist_(0.0, noise_gyro_std_dev)
-{
+  noise_dist_(0.0, noise_gyro_std_dev),
+  q_B0_(Eigen::Vector4d(0.25*M_PI, 0.75*M_PI, -0.75*M_PI, -0.25*M_PI)) {
+
+  // -------- DH table --------
+  DH_params_ <<
+    //   a      alpha     d   theta0
+       0.120,   0.0,     0.0,  0.0,   // B->0
+       0.134,   M_PI/2,  0.0,  0.0,   // 0->1
+       0.115,   0.0,     0.0,  0.0,   // 1->2
+       0.110,   0.0,     0.0,  0.0,   // 2->3
+       0.024,   M_PI/2,  0.0,  0.0,   // 3->4
+       0.068,   0.0,     0.0,  0.0;   // 4->5
+
   // 1) publishers
   imu_publisher_ = this->create_publisher<imu_interfaces::msg::ImuMeasured>("imu_mea", 1);
   heartbeat_publisher_ = this->create_publisher<watchdog_interfaces::msg::NodeState>("/imu_state", 1);
 
   // 2) always create heartbeat timer (100ms), but _publish only when enabled
   heartbeat_timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&IMUnode::heartbeat_timer_callback, this));
+
+  // To get the q for b_attitude_cot b_postion_cot
+  joint_subscriber_ = this->create_subscription<dynamixel_interfaces::msg::JointVal>("/joint_mea", 1, std::bind(&IMUnode::jointValCallback, this, std::placeholders::_1));
 
   // 3) mode-specific init
   this->declare_parameter<std::string>("mode", "None");
@@ -84,9 +98,20 @@ void IMUnode::microstrain_callback(const sensor_msgs::msg::Imu::SharedPtr msg) {
 }
 
 void IMUnode::PublishMicroStrainMeasurement() { // Timer callbacked as 1kHz
+
+  //change the coordinate to {CoT} from {B}
+
+  G_R_B = q2rot(real_imu_data_.q.data());
+
+  Eigen::Matrix3d G_R_cot = G_R_B * B_R_cot;
+  Eigen::Vector3d w_B(real_imu_data_.w[0], real_imu_data_.w[1], real_imu_data_.w[2]);
+
+  double q_cot[4]; rot2q(G_R_cot, q_cot);
+  Eigen::Vector3d w_cot = B_R_cot.transpose() * w_B;
+
   auto output_msg = imu_interfaces::msg::ImuMeasured();
-  output_msg.q = { real_imu_data_.q[0], real_imu_data_.q[1], real_imu_data_.q[2], real_imu_data_.q[3] };
-  output_msg.w = { real_imu_data_.w[0], real_imu_data_.w[1], real_imu_data_.w[2] };
+  output_msg.q = { q_cot[0], q_cot[1], q_cot[2], q_cot[3] };
+  output_msg.w = { w_cot[0], w_cot[1], w_cot[2] };
   imu_publisher_->publish(output_msg);
 
   // imu disconnect(or hz dropping) monitoring
@@ -195,11 +220,20 @@ void IMUnode::PublishMuJoCoMeasurement() {
     delayed_data.w[2] + noise_dist_(gen_)
   };
 
+  //change the coordinate to {CoT} from {B}
+
+  G_R_B = q2rot(noisy_q.data());
+
+  Eigen::Matrix3d G_R_cot = G_R_B * B_R_cot;
+  Eigen::Vector3d w_B(noisy_w[0], noisy_w[1], noisy_w[2]);
+
+  double q_cot[4]; rot2q(G_R_cot, q_cot);
+  Eigen::Vector3d w_cot = B_R_cot.transpose() * w_B;
+
   // Construct and publish the IMU measurement message
   auto output_msg = imu_interfaces::msg::ImuMeasured();
-  output_msg.q = { noisy_q[0], noisy_q[1], noisy_q[2], noisy_q[3] };
-  output_msg.w = { noisy_w[0], noisy_w[1], noisy_w[2] };
-
+  output_msg.q = { q_cot[0], q_cot[1], q_cot[2], q_cot[3] };
+  output_msg.w = { w_cot[0], w_cot[1], w_cot[2] };
   imu_publisher_->publish(output_msg);
 }
 
@@ -214,6 +248,42 @@ void IMUnode::heartbeat_timer_callback() {
 
   // uint8 overflow wraps automatically
   hb_state_ = static_cast<uint8_t>(hb_state_ + 1);
+}
+
+/* for Coordinate Define */
+void IMUnode::jointValCallback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg) {
+
+  for (uint8_t i = 0; i < 5; ++i) {
+    arm_des_[0][i] = msg->a1_des[i];   // Arm 1
+    arm_des_[1][i] = msg->a2_des[i];   // Arm 2
+    arm_des_[2][i] = msg->a3_des[i];   // Arm 3
+    arm_des_[3][i] = msg->a4_des[i];   // Arm 4
+  }
+
+  for (uint8_t arm = 0; arm < 4; ++arm) {
+    Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
+
+    for (uint8_t i = 0; i <= 5; ++i) {
+      const double q = (i == 0) ? q_B0_(arm) : arm_des_[arm][i-1];
+      T *= compute_DH(DH_params_(i,0), DH_params_(i,1), DH_params_(i,2), DH_params_(i,3) + q);
+    }
+    // save position vector
+    B_p_arm.col(arm) = T.block<3,1>(0,3);
+    B_h_arm.col(arm) = T.block<3,3>(0,0).col(0);
+  }
+
+  // get the CoT coordinate => B_p_cot / B_R_cot
+  B_p_cot = B_p_arm.rowwise().mean();
+
+  Eigen::Vector3d z_unit = B_h_arm.rowwise().sum().normalized();
+  Eigen::Vector3d x_unit = ((B_p_arm.col(0) + B_p_arm.col(3)) - (B_p_arm.col(1) + B_p_arm.col(2))).normalized();
+  Eigen::Vector3d y_unit = ((B_p_arm.col(0) + B_p_arm.col(1)) - (B_p_arm.col(2) + B_p_arm.col(3))).normalized();
+
+  const double ortho_eps = 1e-3; //if not othogonal => believe the X-axis than Y-axis (not perpect yet)
+  if ( std::abs(x_unit.dot(y_unit)) > ortho_eps || std::abs(y_unit.dot(z_unit)) > ortho_eps || std::abs(x_unit.dot(z_unit)) > ortho_eps ) y_unit = z_unit.cross(x_unit).normalized();
+
+  B_R_cot.col(0) = x_unit; B_R_cot.col(1) = y_unit; B_R_cot.col(2) = z_unit;
+
 }
 
 int main(int argc, char **argv) {

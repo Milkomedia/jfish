@@ -45,7 +45,7 @@ inline ControlParameters getControlParameters() {
 
 inline IntegralParameters getIntegralParameters() {
   IntegralParameters param;
-  param.kIX = 1.0; //위치값
+  param.kIX = 0.0; //위치값
   
   param.ki = 0.0;  //이용안하는 값
   param.kIR = 0.0; //이용안하는 값
@@ -53,9 +53,9 @@ inline IntegralParameters getIntegralParameters() {
   param.kI = 0.00; //자세값
   param.kyI = 0.0; //yaw값
 
-  param.c1 = 1.0; //위치 (바꾸지말기)
+  param.c1 = 0.0; //위치 (바꾸지말기)
   param.c2 = 0.0; //자세
-  param.c3 = 0.01; //yaw (바꾸지말기)
+  param.c3 = 0.0; //yaw (바꾸지말기)
   return param;
 }
 
