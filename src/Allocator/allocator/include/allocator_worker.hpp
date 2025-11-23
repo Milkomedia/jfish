@@ -67,6 +67,12 @@ private:
   Eigen::Vector4d pwm_;                 // calculated pwm [0.0 ~ 1.0]
   Eigen::Vector3d Pc_;                  // CoM bias vector wrt. body frame [m]
   
+  // coordinate change data {b}2{CoT} 
+  Eigen::Matrix<double, 3, 4> B_p_arm;   // position vector group of each arm baed on FK [m]
+  Eigen::Matrix<double, 3, 4> B_h_arm;   // x direction heading vector group of each arm on {B} [unit]
+  Eigen::Vector3d B_p_cot;
+  Eigen::Matrix3d B_R_cot;
+
   // yaw-wrench conversion params
   // const double lpf_alpha_ = 0.093158;
   const double lpf_alpha_ = 0.0001;  // simulator gain

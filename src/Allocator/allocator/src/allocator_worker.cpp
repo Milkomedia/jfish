@@ -53,10 +53,10 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   double avg_dt = dt_sum_ / static_cast<double>(buffer_size_);
   filtered_frequency_ = 1.0 / avg_dt;
 
-  // get [Mx My Mz F]
+  // get [Mx My Mz F] in {CoT}
   Eigen::Vector4d Wrench;
   Wrench << msg->moment[0], msg->moment[1], msg->moment[2], msg->force;
-  Pc_ << msg->p_com[0], msg->p_com[1], 0; 
+  Pc_ << msg->p_com[0], msg->p_com[1], 0; //cot_p_c
   // yaw wrench conversion
   tauz_bar_ = lpf_alpha_*Wrench(2) + lpf_beta_*tauz_bar_;
   double tauz_r = Wrench(2) - tauz_bar_;
@@ -106,7 +106,6 @@ void AllocatorWorker::controllerCallback(const controller_interfaces::msg::Contr
   tilt_msg.th4 = C2_des_(3);
   tilt_angle_publisher_->publish(tilt_msg);
 }
-
 
 Eigen::Matrix4d AllocatorWorker::calc_A1(const Eigen::Vector4d& C2) {
   Eigen::Matrix4d A1;
@@ -181,6 +180,7 @@ Eigen::Matrix4d AllocatorWorker::calc_A2(const Eigen::Vector4d& C1, const Eigen:
 }
 
 void AllocatorWorker::jointValCallback(const dynamixel_interfaces::msg::JointVal::SharedPtr msg)  {
+  
   for (uint8_t i = 0; i < 5; ++i) {
     arm_mea_[0][i] = msg->a1_mea[i];   // Arm 1
     arm_mea_[1][i] = msg->a2_mea[i];   // Arm 2
@@ -200,13 +200,31 @@ void AllocatorWorker::jointValCallback(const dynamixel_interfaces::msg::JointVal
       const double q = (i == 0) ? q_B0_(arm) : arm_mea_[arm][i-1];
       T *= compute_DH(DH_params_(i,0), DH_params_(i,1), DH_params_(i,2), DH_params_(i,3) + q);
     }
-
     // save position vector
-    r_mea_.col(arm) = T.block<3,1>(0,3);
+    B_p_arm.col(arm) = T.block<3,1>(0,3);
 
     // save tilted angle
-    const Eigen::Vector3d heading = T.block<3,3>(0,0).col(0);
-    C2_mea_(arm) = std::asin(std::clamp(heading.head<2>().cwiseAbs().sum() * inv_sqrt2, -0.5, 0.5));
+    B_h_arm.col(arm) = T.block<3,3>(0,0).col(0); 
+  }
+
+  // get the CoT coordinate => B_p_cot / B_R_cot
+  B_p_cot = B_p_arm.rowwise().mean();
+
+  Eigen::Vector3d z_unit = B_h_arm.rowwise().sum().normalized();
+  Eigen::Vector3d x_unit = ((B_p_arm.col(0) + B_p_arm.col(3)) - (B_p_arm.col(1) + B_p_arm.col(2))).normalized();
+  Eigen::Vector3d y_unit = ((B_p_arm.col(0) + B_p_arm.col(1)) - (B_p_arm.col(2) + B_p_arm.col(3))).normalized();
+
+  const double ortho_eps = 1e-3; //if not othogonal => believe the X-axis than Y-axis (not perpect yet)
+  if ( std::abs(x_unit.dot(y_unit)) > ortho_eps || std::abs(y_unit.dot(z_unit)) > ortho_eps || std::abs(x_unit.dot(z_unit)) > ortho_eps ) y_unit = z_unit.cross(x_unit).normalized();
+
+  B_R_cot.col(0) = x_unit; B_R_cot.col(1) = y_unit; B_R_cot.col(2) = z_unit;
+
+  // {CoT} value
+  for (uint8_t arm = 0; arm < 4; arm++) r_mea_.col(arm) = B_R_cot.transpose() * (B_p_arm.col(arm) - B_p_cot); //cot_p_arm
+
+  for (uint8_t arm = 0; arm < 4; ++arm) {
+  const Eigen::Vector3d cot_h_arm = B_R_cot.transpose() * B_h_arm.col(arm);
+  C2_mea_(arm) = std::asin(std::clamp(cot_h_arm.head<2>().cwiseAbs().sum() * inv_sqrt2, -0.5, 0.5));
   }
 
   if (!allocator_run_) {
@@ -227,8 +245,7 @@ void AllocatorWorker::heartbeat_timer_callback() {
   hb_state_ = static_cast<uint8_t>(hb_state_ + 1);
 }
 
-void AllocatorWorker::debugging_timer_callback() 
-{
+void AllocatorWorker::debugging_timer_callback() {
   // Populate the debugging message
   allocator_interfaces::msg::AllocatorDebugVal info_msg;
   for (int i = 0; i < 4; i++) 
