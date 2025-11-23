@@ -216,7 +216,7 @@ void OptiTrackNode::PublishMuJoCoMeasurement() {
   // Velocity
   Eigen::Vector3d G_v_cot = G_R_B * (B_v_cot + (B_R_cot*omega_cot).cross(B_p_cot)); // G에서 본 B와 CoT의상대속도값 
   for (size_t i = 0; i < 3; ++i) G_v_cot[i] += noisy_vel[i]; 
-  RCLCPP_INFO(this->get_logger(), "%f %f", B_v_cot(1), G_v_cot(1));
+  
   // Accelation
   Eigen::Vector3d G_a_cot; // pass
   for (size_t i = 0; i < 3; ++i) G_a_cot[i] += real_optitrack_data_.acc[i]; 
@@ -281,7 +281,7 @@ void OptiTrackNode::jointValCallback(const dynamixel_interfaces::msg::JointVal::
     Eigen::Vector3d v_raw = (B_p_cot - B_p_cot_prev) / last_dt_;
     B_v_cot = vel_lpf_alpha_ * v_raw + vel_lpf_beta_ * B_v_cot;
   }
-
+  
   B_p_cot_prev = B_p_cot;
 
   Eigen::Vector3d z_unit = B_h_arm.rowwise().sum().normalized();
