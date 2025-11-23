@@ -8,15 +8,14 @@ ControllerNode::ControllerNode()
    state_(new fdcl::state_t()),
    command_(new fdcl::command_t()),
    thread_running_(true),
-   fdcl_controller_(state_, command_)
-{
+   fdcl_controller_(state_, command_) {
+
   // Subscriptions
   sbus_subscription_ = this->create_subscription<sbus_interfaces::msg::SbusSignal>("/sbus_signal", 1, std::bind(&ControllerNode::sbusCallback, this, std::placeholders::_1));
   optitrack_mea_subscription_ = this->create_subscription<mocap_interfaces::msg::MocapMeasured>("/optitrack_mea", 1, std::bind(&ControllerNode::optitrackCallback, this, std::placeholders::_1));
   imu_mea_subscription_ = this->create_subscription<imu_interfaces::msg::ImuMeasured>("/imu_mea", 1, std::bind(&ControllerNode::imuCallback, this, std::placeholders::_1));
   reference_subscription_ = this->create_subscription<controller_interfaces::msg::ControllerReference>("/ref_MPC", 1, std::bind(&ControllerNode::refCallback, this, std::placeholders::_1));
-  // mujoco_subscription_ = this->create_subscription<mujoco_interfaces::msg::MujocoState>("/mujoco_state", 1, std::bind(&ControllerNode::mujocoCallback, this, std::placeholders::_1));
- 
+
   // Publishers
   controller_publisher_ = this->create_publisher<controller_interfaces::msg::ControllerOutput>("/controller_output", 1);
   heartbeat_publisher_  = this->create_publisher<watchdog_interfaces::msg::NodeState>("/controller_state", 1);
@@ -44,19 +43,19 @@ ControllerNode::ControllerNode()
 }
 
 void ControllerNode::controller_timer_callback() {
+  
   double f_out_geom;
   Eigen::Vector3d M_out_geom;
   
   // Input the ref ref[0~2] = {G}pb_des / ref[3] = {G}heading_des
-  
-  if(true) // SBUS
-  {
+  if(true) { // SBUS
     command_->xd << sbus_ref_[0], sbus_ref_[1], sbus_ref_[2];
     command_->b1d << std::cos(sbus_ref_[3]), std::sin(sbus_ref_[3]), 0.0;
   }
-  else{ // MPC baed path
+  else { // MPC baed path
     //switching 하는 과정에서의 안정성을 보장하도록 LPF같은걸 해야하는 게 맞을듯  
-    mpc_ref_[0]++; //just check
+    command_->xd << mpc_ref_[0], mpc_ref_[1], mpc_ref_[2];
+    command_->b1d << mpc_ref_[3], mpc_ref_[4], mpc_ref_[5];
   } 
 
   command_->xd_dot.setZero();
@@ -73,19 +72,24 @@ void ControllerNode::controller_timer_callback() {
   tau_tilde_star_.y() = M_out_geom.y();
 
   if (estimator_state_ == 0) { // conventional
+
     F_out_pub_ = f_out_geom;
     M_out_pub_ = M_out_geom;
+
   }
   else if (estimator_state_ == 1) { // dob apply
+
     F_out_pub_ = f_out_geom;
     tau_tilde_star_ = tau_tilde_star_ - d_hat_;
     M_out_pub_.x() = tau_tilde_star_.x();
     M_out_pub_.y() = tau_tilde_star_.y();
     M_out_pub_.z() = M_out_geom.z();
+
   }
-  else if (estimator_state_ == 2){ // com estimator apply
+  else if (estimator_state_ == 2) { // com estimator apply
+
     Eigen::Vector3d e_3_(0.0, 0.0, 1.0);
-    Eigen::Vector3d acc = state_->a - g_ * state_->R * e_3_;
+    Eigen::Vector3d acc = state_->a - g_ * state_->R * e_3_; //{G}
     Eigen::Vector3d F_star(0.0, 0.0, f_out_geom);
 
     static double az1=0.0, az2=0.0, az3=0.0; // z-axis
@@ -103,10 +107,10 @@ void ControllerNode::controller_timer_callback() {
                   q_acc_z,      0.0;
     
     Eigen::Matrix2d Q_A_hat = m_bar_*skew_acc;
-    Eigen::Vector2d Pc_hat_dot = gamma_*Q_A_hat.transpose()*d_hat_;
-    Pc_hat_ += Pc_hat_dot*DT; // 1/s
-    Pc_hat_ = (Pc_hat_.cwiseMax(Eigen::Vector2d::Constant(-0.08))).cwiseMin(Eigen::Vector2d::Constant(0.08)); // saturation
-    if ((Pc_hat_.array() == -0.08).any() || (Pc_hat_.array() == 0.08).any()) {RCLCPP_WARN(this->get_logger(), "Pc_hat_ saturated STOP");}
+    Eigen::Vector2d cot_v_com = gamma_*Q_A_hat.transpose()*d_hat_; // Z-down
+    cot_p_com += cot_v_com*DT; // 1/s
+    cot_p_com = (cot_p_com.cwiseMax(Eigen::Vector2d::Constant(-0.08))).cwiseMin(Eigen::Vector2d::Constant(0.08)); // saturation
+    if ((cot_p_com.array() == -0.08).any() || (cot_p_com.array() == 0.08).any()) {RCLCPP_WARN(this->get_logger(), "cot_p_com saturated STOP");}
 
     F_out_pub_ = f_out_geom;
     tau_tilde_star_ = tau_tilde_star_ - d_hat_;
@@ -121,8 +125,8 @@ void ControllerNode::controller_timer_callback() {
   }
 
   // d hat update
-  Eigen::Vector3d RPY(roll_[0], -pitch_[0], -yaw_[0]);
-  d_hat_ = DoB_update(RPY, tau_tilde_star_);
+  Eigen::Vector3d RPY(roll_[0], -pitch_[0], -yaw_[0]); //{CoT}기준 z-down (roll_ pitch_ yaw_ 가 z-up)
+  d_hat_ = DoB_update(RPY, tau_tilde_star_); // without CoM motion between {B} and {CoT} z-down 
 
   if (is_paused_){overriding_coeff_ -= turnoff_coeff_;} // pause
   else           {overriding_coeff_ += turnon_coeff_;}  // resume
@@ -166,9 +170,9 @@ void ControllerNode::controller_timer_callback() {
   controller_interfaces::msg::ControllerOutput msg;
   // msg.force = F_out_pub_;
   msg.force = F_cmd;
-  msg.moment = {M_out_pub_[0], -M_out_pub_[1], -M_out_pub_[2]};
-  msg.d_hat = {d_hat_[0], -d_hat_[1]};
-  msg.p_com = {Pc_hat_[0], -Pc_hat_[1]};
+  msg.moment = {M_out_pub_[0], -M_out_pub_[1], -M_out_pub_[2]}; //z-up
+  msg.d_hat = {d_hat_[0], -d_hat_[1]}; //z-up
+  msg.p_com = {cot_p_com(0), -cot_p_com(1)}; //z-up
   controller_publisher_->publish(msg);
   // RCLCPP_INFO(this->get_logger(), "[x=%.4f, y=%.4f, z=%.4f]", prev_d_hat_[0], -prev_d_hat_[1], -prev_d_hat_[2]);
 }
@@ -234,7 +238,7 @@ void ControllerNode::sbusCallback(const sbus_interfaces::msg::SbusSignal::Shared
   if(estimator_state_ != prev_estimator_state_){
     prev_estimator_state_ = estimator_state_;
     d_hat_ =  Eigen::Vector2d::Zero();
-    Pc_hat_ =  Eigen::Vector2d::Zero();
+    cot_p_com =  Eigen::Vector2d::Zero();
     if     (estimator_state_==0){RCLCPP_INFO(this->get_logger(), "control mode -> [Conventional]");}
     else if(estimator_state_==1){RCLCPP_INFO(this->get_logger(), "control mode -> [DOB]");}
     else if(estimator_state_==2){RCLCPP_INFO(this->get_logger(), "control mode -> [CoM estimating]");}

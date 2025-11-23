@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <Eigen/Dense>
+#include <vector>
 
 #include "sbus_interfaces/msg/sbus_signal.hpp"
 #include "controller_interfaces/msg/controller_output.hpp"
@@ -37,11 +38,11 @@ constexpr double mapping_factor_yaw  = CMD_YAW_SPD / 672000.0;
 constexpr double two_PI = 2.0 * M_PI;
 
 constexpr double X_offset = 0.0; // [m] 
-constexpr double Y_offset = 0.6; // [m] 
+constexpr double Y_offset = 0.0; // [m] REAL 0.6!!!!!!!!!!!! only sim 0.0 
 constexpr double Z_offset = 0.0; // [m] it must be (+) sign.
 
 static const double DT = 0.0025;    // [s] 400 Hz
-static const double fc = 0.01;       // [Hz] Butterworth cutoff initial Hz = 0.3
+static const double fc = 0.5;       // [Hz] Butterworth cutoff initial Hz = 0.3
 const double wc = 2.0 * M_PI * fc;  // ωc
 const double w2 = wc * wc;
 const double w3 = w2 * wc;  
@@ -112,6 +113,7 @@ private:
   rclcpp::Subscription<imu_interfaces::msg::ImuMeasured>::SharedPtr imu_mea_subscription_;
   rclcpp::Subscription<mujoco_interfaces::msg::MujocoState>::SharedPtr mujoco_subscription_;
   rclcpp::Subscription<controller_interfaces::msg::ControllerReference>::SharedPtr reference_subscription_;
+  
   rclcpp::Publisher<controller_interfaces::msg::ControllerOutput>::SharedPtr controller_publisher_;
   
   rclcpp::Publisher<watchdog_interfaces::msg::NodeState>::SharedPtr heartbeat_publisher_;
@@ -145,9 +147,9 @@ private:
   Eigen::Vector2d tau_tilde_star_ = Eigen::Vector2d::Zero();
 
   // CoM estimate state
-  Eigen::Vector2d Pc_hat_ = Eigen::Vector2d::Zero();
-  double m_bar_ = 8.0;
-  double gamma_ = 0.00004;
+  Eigen::Vector2d cot_p_com = Eigen::Vector2d::Zero();
+  double m_bar_ = 4.7; // REAL m_bar_ = 8.0;
+  double gamma_ = 0.0001;
   double g_ =9.80665;
 
   double F_out_pub_ = 0.;

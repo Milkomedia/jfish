@@ -14,8 +14,8 @@ set(msg_files
   "msg/ControllerOutput.msg"
   "msg/ControllerInfo.msg"
   "msg/ControllerDebugVal.msg"
-  "msg/ControllerReference.msg"
   "msg/EstimatorOutput.msg"
+  "msg/ControllerReference.msg"
 )
 
 # Generate interfaces

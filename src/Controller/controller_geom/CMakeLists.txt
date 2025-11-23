@@ -14,6 +14,7 @@ find_package(rclcpp REQUIRED)
 find_package(controller_interfaces REQUIRED)
 find_package(sbus_interfaces REQUIRED)
 find_package(imu_interfaces REQUIRED)
+find_package(dynamixel_interfaces REQUIRED)
 find_package(mujoco_interfaces REQUIRED)
 find_package(mocap_interfaces REQUIRED)
 find_package(watchdog_interfaces REQUIRED)
@@ -39,6 +40,7 @@ ament_target_dependencies(controller_worker_geom
   controller_interfaces
   sbus_interfaces
   imu_interfaces
+  dynamixel_interfaces
   mujoco_interfaces
   mocap_interfaces
   watchdog_interfaces
